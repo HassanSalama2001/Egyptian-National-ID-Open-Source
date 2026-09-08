@@ -1,37 +1,39 @@
 import cv2
-import json
-import numpy as np
+import pytest
 from national_id_ocr.core.pipeline import Pipeline
 from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
 
-def test_pipeline(img_path):
-    print(f"Testing pipeline on: {img_path}")
-    img = cv2.imread(img_path)
-    if img is None:
-        print("Error: Could not load image")
-        return
 
-    # Initialize hardened engine
+@pytest.mark.xfail(
+    reason=(
+        "Known gap: NID field-crop ROI doesn't reliably capture all 14 "
+        "digits on real (non-synthetic) card photos yet - tracked as part "
+        "of the OCR redesign (lightweight digit recognizer + ROI accuracy)."
+    ),
+    strict=False,
+)
+def test_pipeline_extracts_a_valid_checksummed_nid(front_image_path):
+    """
+    End-to-end smoke test: the pipeline should extract a 14-digit NID that
+    passes its own Mod-11 checksum from a real front-side sample image.
+    This does not assert the *exact* digits (we don't have ground truth for
+    assets/front.jpg), only that extraction+repair produces something
+    internally consistent - the strongest thing we can check without a
+    labeled dataset.
+    """
+    img = cv2.imread(str(front_image_path))
+    assert img is not None, f"Could not load {front_image_path}"
+
     engine = EasyOCREngine(gpu=False)
     pipeline = Pipeline(ocr_engine=engine)
-    
-    # Process
     result = pipeline.process_image(img)
-    
-    # Save a JSON file for the user first (safer than printing on Windows)
-    with open("debug_pipeline_result.json", "w", encoding="utf-8") as f:
-        json.dump(result.model_dump(), f, indent=2, ensure_ascii=False, default=str)
-    
-    # Display Results (Might still fail on some consoles but we have the file)
-    try:
-        print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False, default=str))
-    except UnicodeEncodeError:
-        print("Success! (Console cannot display Arabic, see debug_pipeline_result.json)")
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--img", default="assets/dataset/ID0.png")
-    args = parser.parse_args()
-    
-    test_pipeline(args.img)
+    assert result.front is not None
+    assert result.front.national_id is not None
+    assert len(result.front.national_id) == 14, (
+        f"Expected 14-digit NID, got {result.front.national_id!r}"
+    )
+    assert result.decoded is not None, (
+        "NID failed checksum validation - extraction produced an "
+        "internally-inconsistent result"
+    )

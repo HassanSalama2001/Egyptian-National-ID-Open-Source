@@ -30,7 +30,8 @@ class Pipeline:
         """
         start_time = time.time()
         result = IDCard()
-        
+        field_confidences: List[float] = []
+
         try:
             # 1. Detect & Align Card (Warp to 1200x750)
             analyzer = LayoutAnalyzer()
@@ -47,13 +48,14 @@ class Pipeline:
                 # 4. OCR on Crops
                 refined_data = {}
                 refined_crops = {}
-                
+
                 for field_name, crop in field_crops.items():
                     if crop.size > 0:
                         # Process each crop for OCR
                         txt, crop_b64 = self._process_crop(crop, field_name)
                         refined_data[field_name] = txt
                         refined_crops[field_name] = crop_b64
+                        field_confidences.append(self._last_field_confidence)
                 
                 # 5. Populate Data
                 result.front = self._populate_front_v4(refined_data, refined_crops)
@@ -67,7 +69,16 @@ class Pipeline:
                     if result.decoded:
                         result.front.date_of_birth = result.decoded.birth_date
 
-            result.confidence = 0.95 if result.decoded else 0.80
+            # Confidence reflects what we actually measured: mean per-field OCR
+            # score, gated by whether the NID passed its Mod-11 checksum (a
+            # hard correctness signal that should dominate a soft OCR score -
+            # a checksum failure means we *know* something is wrong, no
+            # matter how confident the OCR engine was on individual glyphs).
+            ocr_confidence = float(np.mean(field_confidences)) if field_confidences else 0.0
+            if result.decoded:
+                result.confidence = ocr_confidence
+            else:
+                result.confidence = min(ocr_confidence, 0.3)
             
         except Exception as e:
             logger.error(f"Pipeline processing failed: {e}")
@@ -77,23 +88,29 @@ class Pipeline:
         result.processing_time_ms = int((time.time() - start_time) * 1000)
         return result
 
+    NUMERIC_FIELDS = {"national_id", "birth_date", "serial_number"}
+
     def _process_crop(self, crop: np.ndarray, field_name: str) -> tuple[str, str]:
         """Utility for processing individual field crops."""
         # UI Crop (Original color)
         _, buffer = cv2.imencode('.jpg', crop)
         crop_b64 = f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
-        
+
         # Enhancement for OCR
         enhanced_crop = self._enhance_crop(crop)
-        
-        # OCR
-        results = self.ocr_engine.read_layout(enhanced_crop)
-        
+
+        # OCR - constrain to a digit allowlist for numeric fields so the
+        # engine can't emit letters into fields that must be pure digits
+        mode = "numeric" if field_name in self.NUMERIC_FIELDS else "auto"
+        results = self.ocr_engine.read_layout(enhanced_crop, mode=mode)
+
         # Sort results: Top-to-Bottom, then Right-to-Left (for Arabic)
         results.sort(key=lambda r: (np.mean(np.array(r[0])[:, 1]), -np.mean(np.array(r[0])[:, 0])))
-        
+
         text = " ".join([r[1] for r in results])
-        
+        confidence = min([r[2] for r in results], default=0.0)
+        self._last_field_confidence = confidence
+
         # Purification based on field type
         if field_name in ["full_name", "first_name", "address"]:
             import re
@@ -102,7 +119,7 @@ class Pipeline:
         elif field_name in ["national_id", "birth_date"]:
              text = normalize_arabic_numerals(text).replace(" ", "")
              text = "".join([c for c in text if c.isdigit()])
-             
+
         return text.strip(), crop_b64
 
     def _populate_front_v4(self, refined_data: dict, refined_crops: dict) -> IDCardFront:

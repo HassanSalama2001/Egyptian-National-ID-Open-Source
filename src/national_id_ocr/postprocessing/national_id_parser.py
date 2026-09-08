@@ -1,7 +1,10 @@
+import logging
 from datetime import date
 from typing import Optional
 from ..models.id_card import NationalIDDecoded
 from ..models.enums import Gender, Governorate
+
+logger = logging.getLogger(__name__)
 
 GOVERNORATE_CODES = {
     "01": Governorate.CAIRO,
@@ -66,14 +69,15 @@ def decode_national_id(nid: str) -> Optional[NationalIDDecoded]:
         gender = Gender.MALE if gender_digit % 2 != 0 else Gender.FEMALE
         
         return NationalIDDecoded(
-            birth_date=birth_date,
+            birth_date=birth_date.isoformat(),
             governorate=governorate,
             gender=gender,
             century=century,
             sequence=nid[9:13],
             check_digit=int(nid[13])
         )
-    except Exception:
+    except Exception as e:
+        logger.debug(f"decode_national_id failed for {nid!r}: {e}")
         return None
 
 def validate_nid_checksum(nid: str) -> bool:
@@ -134,27 +138,24 @@ def repair_nid(noisy_nid: str) -> Optional[str]:
         for char in chars:
             reverse_conf[char] = digit
             
-    # Try swapping one potentially confused character at a time
-    for i in range(len(candidate)):
-        original_char = cleaned[i]
-        if original_char in reverse_conf:
-            # We already tried the primary mapping in fuzzy_digit_repair
-            # But maybe it was something else? No, fuzzy_digit_repair is deterministic.
-            pass
-            
-        # Let's try every digit at this position if it's suspicious
-        # But even better: cycle through 0-9 for each position if the checksum fails
-        # This is fast for only 14 positions.
+    # Only retry positions where the *original* character was ambiguous
+    # (a letter, not already a clean digit). A Mod-11 checksum only has a
+    # 1-in-11 chance of rejecting a wrong digit, so trying every position
+    # - including ones we already read cleanly - risks "fixing" a correct
+    # digit into a different value that also happens to pass the checksum.
+    suspicious_positions = [i for i, ch in enumerate(cleaned[:14]) if not ch.isdigit()]
+
+    for i in suspicious_positions:
         original_digit = candidate[i]
         for d in "0123456789":
             if d == original_digit: continue
-            
+
             test_nid = candidate[:i] + d + candidate[i+1:]
             if validate_nid_checksum(test_nid):
                 # Extra validation: does it make sense decoded?
                 if decode_national_id(test_nid):
                     return test_nid
-                    
+
     return None
 
 def fuzzy_digit_repair(text: str) -> str:

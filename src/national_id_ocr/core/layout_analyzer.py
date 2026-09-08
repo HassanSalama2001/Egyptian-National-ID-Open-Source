@@ -61,7 +61,7 @@ class LayoutAnalyzer:
         if contours:
             rect = cv2.minAreaRect(contours[0])
             box = cv2.boxPoints(rect)
-            return np.int0(box)
+            return box.astype(np.intp)
             
         return None
 
