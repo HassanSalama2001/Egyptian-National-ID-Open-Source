@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from ..detection.card_detector import CardDetector
 from ..detection.side_classifier import SideClassifier, IDSide
 from ..ocr.base import OCREngine, OCRPreprocessor
+from ..ocr.digit_classifier_engine import DigitClassifierEngine
 from ..postprocessing.numeral_converter import normalize_arabic_numerals, clean_ocr_text
 from ..postprocessing.national_id_parser import decode_national_id, find_nid_in_text
 from ..models.id_card import IDCard, IDCardFront, IDCardBack
@@ -23,6 +24,10 @@ class Pipeline:
         self.classifier = SideClassifier()
         self.ocr_engine = ocr_engine
         self.preprocessor = OCRPreprocessor()
+        # Numeric fields (national_id, birth_date, serial_number) use a
+        # dedicated lightweight digit classifier instead of the general
+        # OCR engine - see ocr/digit_classifier_engine.py for why.
+        self.digit_engine = DigitClassifierEngine()
 
     def process_image(self, image: np.ndarray) -> IDCard:
         """
@@ -96,13 +101,22 @@ class Pipeline:
         _, buffer = cv2.imencode('.jpg', crop)
         crop_b64 = f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
+        if field_name in self.NUMERIC_FIELDS:
+            # Dedicated per-character digit classifier instead of general
+            # OCR - see ocr/digit_classifier_engine.py. It does its own
+            # preprocessing/segmentation, so pass the raw crop.
+            text = self.digit_engine.extract_digits(crop)
+            # Segmentation-based classification doesn't produce a
+            # per-detection confidence the way EasyOCR does; treat a
+            # plausible-length result as reasonably confident and let
+            # checksum validation (a much stronger signal) be the real
+            # arbiter for national_id specifically.
+            self._last_field_confidence = 0.9 if text else 0.0
+            return text.strip(), crop_b64
+
         # Enhancement for OCR
         enhanced_crop = self._enhance_crop(crop)
-
-        # OCR - constrain to a digit allowlist for numeric fields so the
-        # engine can't emit letters into fields that must be pure digits
-        mode = "numeric" if field_name in self.NUMERIC_FIELDS else "auto"
-        results = self.ocr_engine.read_layout(enhanced_crop, mode=mode)
+        results = self.ocr_engine.read_layout(enhanced_crop, mode="auto")
 
         # Sort results: Top-to-Bottom, then Right-to-Left (for Arabic)
         results.sort(key=lambda r: (np.mean(np.array(r[0])[:, 1]), -np.mean(np.array(r[0])[:, 0])))
@@ -124,9 +138,8 @@ class Pipeline:
             # dropped them, e.g. "\u0634\u0627\u0631\u0639 \u0667\u0666\u060C \u0627\u0644\u0634\u0631\u0642\u064A\u0629" -> "\u0634\u0627\u0631\u0639 \u0627\u0644\u0634\u0631\u0642\u064A\u0629".
             text = re.sub(r'[^\s\u0621-\u064A0-9\u0660-\u0669\u060C]', '', text)
             text = " ".join(text.split())
-        elif field_name in ["national_id", "birth_date"]:
-             text = normalize_arabic_numerals(text).replace(" ", "")
-             text = "".join([c for c in text if c.isdigit()])
+        # Numeric fields (national_id, birth_date, serial_number) return
+        # early above via the digit classifier and never reach this point.
 
         return text.strip(), crop_b64
 

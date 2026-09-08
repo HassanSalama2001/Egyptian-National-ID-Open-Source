@@ -19,6 +19,13 @@ dependencies = [
     "typer",
     "rich",
     "pillow",
+    # digit_classifier_engine.py: HOG features (scikit-image) + the
+    # trained SVM (scikit-learn, loaded via joblib) for national_id/
+    # serial_number/birth_date - a core part of the pipeline now, not
+    # just training tooling.
+    "scikit-image",
+    "scikit-learn",
+    "joblib",
 ]
 
 [project.optional-dependencies]
@@ -28,8 +35,6 @@ training = [
     "arabic_reshaper",
     "python-bidi",
     "tqdm",
-    "scikit-learn",
-    "scikit-image",
 ]
 
 [project.scripts]

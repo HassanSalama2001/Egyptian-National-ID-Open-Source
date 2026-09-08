@@ -29,7 +29,10 @@ class LayoutAnalyzer:
             "first_name":    [280, 205, 618, 110],
             "full_name":     [280, 265, 546, 110],
             "address":       [280, 351, 526, 110],
-            "national_id":   [190, 575, 604, 110],
+            # x starts at 380, past the DOB row's own label text
+            # ("تاريخ الميلاد" spans scaled x=170-360), which sits at
+            # a similar height and was bleeding into this crop.
+            "national_id":   [380, 575, 415, 110],
             "birth_date":    [10, 568, 150, 90],
             "serial_number": [10, 669, 156, 90],
         }
