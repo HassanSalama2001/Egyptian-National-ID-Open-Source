@@ -1,0 +1,36 @@
+[project]
+name = "national-id-ocr"
+version = "0.1.0"
+description = "Fast, local, open-source Egyptian National ID OCR extraction pipeline"
+readme = "README.md"
+authors = [{ name = "Antigravity", email = "antigravity@example.com" }]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python-headless",
+    "pytesseract",
+    "easyocr",
+    "numpy",
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2.0",
+    "pydantic-settings",
+    "python-multipart",
+    "typer",
+    "rich",
+    "pillow",
+]
+
+[project.scripts]
+nid-ocr = "national_id_ocr.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

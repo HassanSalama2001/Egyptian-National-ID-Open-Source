@@ -1,0 +1,20 @@
+{
+  "side": "front",
+  "front": {
+    "first_name": null,
+    "full_name": "جموذ تذفم زالع بين الشحصي بطاقة غونبق",
+    "address": "منصور ماجد آسامة جلال شارع الجمهورية الشرقية",
+    "national_id": "437457و",
+    "date_of_birth": null,
+    "card_serial_number": "",
+    "raw_arabic": {
+      "national_id": "437457و",
+      "full_name": "جموذ تذفم زالع بين الشحصي بطاقة غونبق",
+      "address": "منصور ماجد آسامة جلال شارع الجمهورية الشرقية"
+    }
+  },
+  "back": null,
+  "decoded": null,
+  "confidence": 0.9,
+  "processing_time_ms": 11583
+}

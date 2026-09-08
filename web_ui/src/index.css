@@ -1,0 +1,104 @@
+:root {
+  /* Color Palette - Futuristic/Cyberpunk */
+  --bg-color: #050508;
+  --panel-bg: rgba(15, 15, 25, 0.7);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --accent-cyan: #00f3ff;
+  --accent-purple: #7000ff;
+  --text-primary: #e0e0ff;
+  --text-secondary: #a0a0c0;
+  --error: #ff3e3e;
+  --success: #3eff8b;
+  
+  /* Effects */
+  --glow-cyan: 0 0 10px rgba(0, 243, 255, 0.5);
+  --glow-purple: 0 0 15px rgba(112, 0, 255, 0.4);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+  --blur-radius: 12px;
+  
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+/* Low Graphics Mode Overrides */
+[data-graphics="low"] {
+  --blur-radius: 0px;
+  --glass-bg: rgba(15, 15, 25, 0.95);
+  --glow-cyan: none;
+  --glow-purple: none;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(112, 0, 255, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(0, 243, 255, 0.04) 0%, transparent 40%);
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-radius));
+  -webkit-backdrop-filter: blur(var(--blur-radius));
+  border: var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+}
+
+.neon-text {
+  color: var(--accent-cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+.neon-border {
+  border: 1px solid var(--accent-cyan);
+  box-shadow: var(--glow-cyan), inset var(--glow-cyan);
+}
+
+/* Animations */
+@keyframes scanline {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.scan-animation {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 15px var(--accent-cyan);
+  animation: scanline 2.5s linear infinite;
+  z-index: 10;
+}
+
+/* Utilities */
+.btn-futuristic {
+  background: transparent;
+  border: 1px solid var(--accent-purple);
+  color: var(--accent-purple);
+  padding: 10px 20px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+}
+
+.btn-futuristic:hover {
+  background: var(--accent-purple);
+  color: white;
+  box-shadow: var(--glow-purple);
+}

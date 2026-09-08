@@ -1,0 +1,67 @@
+{
+    "ID0.png": {
+        "side": "front",
+        "confidence": 0.8,
+        "processing_time_ms": 11408,
+        "front": {
+            "first_name": "",
+            "full_name": "",
+            "address": "ل",
+            "national_id": "",
+            "date_of_birth": "5",
+            "card_serial_number": "7"
+        }
+    },
+    "ID1.png": {
+        "side": "front",
+        "confidence": 0.8,
+        "processing_time_ms": 8105,
+        "front": {
+            "first_name": "رغد",
+            "full_name": "خليل مراد مؤيد رامي",
+            "address": "رع الجمهوريه الوادي الجديد",
+            "national_id": "69596282302802",
+            "date_of_birth": "23021980",
+            "card_serial_number": "٦ ٥ * ٦ ٠ ٤،?"
+        }
+    },
+    "ID10.png": {
+        "side": "front",
+        "confidence": 0.8,
+        "processing_time_ms": 16506,
+        "front": {
+            "first_name": "",
+            "full_name": "",
+            "address": "",
+            "national_id": "",
+            "date_of_birth": "510045",
+            "card_serial_number": "ع3"
+        }
+    },
+    "ID100.png": {
+        "side": "front",
+        "confidence": 0.8,
+        "processing_time_ms": 15509,
+        "front": {
+            "first_name": "",
+            "full_name": "",
+            "address": "",
+            "national_id": "",
+            "date_of_birth": "52",
+            "card_serial_number": "دح"
+        }
+    },
+    "ID101.png": {
+        "side": "front",
+        "confidence": 0.8,
+        "processing_time_ms": 12859,
+        "front": {
+            "first_name": "",
+            "full_name": "",
+            "address": "ا",
+            "national_id": "",
+            "date_of_birth": "00006",
+            "card_serial_number": "٥"
+        }
+    }
+}

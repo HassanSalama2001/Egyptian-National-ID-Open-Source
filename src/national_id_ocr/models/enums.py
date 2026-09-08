@@ -1,0 +1,51 @@
+from enum import Enum
+
+class Gender(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    UNKNOWN = "unknown"
+
+class Religion(str, Enum):
+    MUSLIM = "muslim"
+    CHRISTIAN = "christian"
+    JEWISH = "jewish"
+    OTHER = "other"
+    UNKNOWN = "unknown"
+
+class MaritalStatus(str, Enum):
+    SINGLE = "single"
+    MARRIED = "married"
+    DIVORCED = "divorced"
+    WIDOWED = "widowed"
+    UNKNOWN = "unknown"
+
+class Governorate(str, Enum):
+    CAIRO = "cairo"
+    ALEXANDRIA = "alexandria"
+    PORT_SAID = "port_said"
+    SUEZ = "suez"
+    DAMIETTA = "damietta"
+    DAKAHLIA = "dakahlia"
+    SHARQUIA = "sharquia"
+    QALYUBIA = "qalyubia"
+    KAFR_EL_SHEIKH = "kafr_el_sheikh"
+    GHARBIA = "gharbia"
+    MONUFIA = "monufia"
+    BEHEIRA = "beheira"
+    ISMAILIA = "ismailia"
+    GIZA = "giza"
+    BENI_SUEF = "beni_suef"
+    FAYOUM = "fayoum"
+    MINYA = "minya"
+    ASSIUT = "assiut"
+    SOHAG = "sohag"
+    QENA = "qena"
+    ASWAN = "aswan"
+    LUXOR = "luxor"
+    RED_SEA = "red_sea"
+    NEW_VALLEY = "new_valley"
+    MATROUH = "matrouh"
+    NORTH_SINAI = "north_sinai"
+    SOUTH_SINAI = "south_sinai"
+    OUTSIDE_EGYPT = "outside_egypt"
+    UNKNOWN = "unknown"
