@@ -112,9 +112,17 @@ class Pipeline:
         self._last_field_confidence = confidence
 
         # Purification based on field type
-        if field_name in ["full_name", "first_name", "address"]:
+        if field_name in ["full_name", "first_name"]:
             import re
             text = re.sub(r'[^\s\u0621-\u064A]', '', text)
+            text = " ".join(text.split())
+        elif field_name == "address":
+            import re
+            # Addresses legitimately contain building/street numbers (as
+            # printed, Arabic-Indic) and a separator comma - stripping to
+            # Arabic-letters-only (as first_name/full_name do) silently
+            # dropped them, e.g. "\u0634\u0627\u0631\u0639 \u0667\u0666\u060C \u0627\u0644\u0634\u0631\u0642\u064A\u0629" -> "\u0634\u0627\u0631\u0639 \u0627\u0644\u0634\u0631\u0642\u064A\u0629".
+            text = re.sub(r'[^\s\u0621-\u064A0-9\u0660-\u0669\u060C]', '', text)
             text = " ".join(text.split())
         elif field_name in ["national_id", "birth_date"]:
              text = normalize_arabic_numerals(text).replace(" ", "")

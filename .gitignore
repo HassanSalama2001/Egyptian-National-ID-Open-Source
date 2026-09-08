@@ -15,9 +15,13 @@ venv/
 credentials/
 *credentials*
 
-# Generated synthetic training/benchmark data - reproducible via
-# scripts/training/generate_trial_ids.py (fixed seed=42), not committed
+# Generated synthetic training/benchmark data and trained models -
+# reproducible via scripts/training/generate_trial_ids.py,
+# generate_digit_crops.py, train_digit_classifier.py (fixed seed=42),
+# not committed
 data/synthetic_front/
+data/digits/
+data/models/
 
 # Node / frontend
 node_modules/

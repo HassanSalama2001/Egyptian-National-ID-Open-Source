@@ -14,15 +14,24 @@ class LayoutAnalyzer:
         self.target_width = target_width
         self.target_height = target_height
         
-        # Normalized coordinates for Front Side (in 1200x750 space)
-        # These are approximate and might need further tuning
+        # Field boxes [x, y, w, h] in the 1200x750 rectified space, derived
+        # from measuring assets/front_template.jpg directly (see
+        # scripts/training/calibrate_template.py) and scaling by the same
+        # factor align_card uses to warp to this canvas. These were
+        # previously hand-guessed and did not match the real template at
+        # all (e.g. first_name pointed at the card's green title text) -
+        # see the Phase 1/2 OCR redesign notes.
         self.FRONT_FIELDS = {
-            "first_name":    [600, 150, 550, 70],
-            "full_name":     [550, 230, 600, 90],
-            "address":       [550, 330, 600, 160],
-            "national_id":   [550, 560, 600, 90],
-            "birth_date":    [50, 560, 450, 90],
-            "serial_number": [50, 660, 450, 70],
+            # x starts at 280, not 15: the photo placeholder box (with its
+            # own "الصورة الشخصية" label) occupies roughly x=56-267,
+            # y=73-363 in this space - a wider box would bleed that label
+            # text into the name/address crops.
+            "first_name":    [280, 205, 618, 110],
+            "full_name":     [280, 265, 546, 110],
+            "address":       [280, 351, 526, 110],
+            "national_id":   [190, 575, 604, 110],
+            "birth_date":    [10, 568, 150, 90],
+            "serial_number": [10, 669, 156, 90],
         }
 
     def get_card_contour(self, image: np.ndarray) -> Optional[np.ndarray]:
@@ -57,12 +66,21 @@ class LayoutAnalyzer:
             if len(approx) == 4:
                 return approx
         
-        # If no 4-point contour found, return the bounding box of the largest contour
-        if contours:
+        # If no 4-point contour found, fall back to the bounding box of the
+        # largest contour - but only if it's actually plausible as a card
+        # (same area threshold as above). Without this check, a tiny
+        # spurious contour (e.g. a logo or a line of text) could be warped
+        # to fill the entire output canvas, corrupting every field crop
+        # taken from the "rectified" result.
+        min_area = image.shape[0] * image.shape[1] * 0.1
+        if contours and cv2.contourArea(contours[0]) >= min_area:
             rect = cv2.minAreaRect(contours[0])
             box = cv2.boxPoints(rect)
             return box.astype(np.intp)
-            
+
+        # No plausible card-sized contour found - the caller's fallback
+        # (treat the whole image as the card, no warping) is more honest
+        # than forcing a bad warp.
         return None
 
     def align_card(self, image: np.ndarray, contour: Optional[np.ndarray] = None) -> Tuple[np.ndarray, Optional[np.ndarray]]:
@@ -102,91 +120,22 @@ class LayoutAnalyzer:
 
     def get_field_crops(self, aligned_image: np.ndarray) -> Dict[str, np.ndarray]:
         """
-        Intelligently detects fields using horizontal projections to find text lines.
-        Falls back to fixed coordinates if dynamic detection fails.
+        Crops each field using fixed, calibrated boxes (self.FRONT_FIELDS).
+
+        This used to attempt "dynamic" detection first via horizontal-
+        projection peak counting, positionally assigning peaks 0/1/2.. to
+        first_name/full_name/address/etc. That approach's box formulas used
+        hardcoded x-offsets (e.g. x=600, width=550) that were never
+        validated against where the text actually sits, and peak-counting
+        silently breaks the moment a field wraps to an extra line or a peak
+        merges/splits differently than assumed. Since align_card now
+        reliably produces a consistent 1200x750 canvas (see the contour
+        area-check fix), fixed calibrated boxes are simpler and more
+        reliable than guessing peak order. See
+        scripts/training/calibrate_template.py for how these were derived.
         """
-        # 1. Grayscale and threshold for projection
-        gray = cv2.cvtColor(aligned_image, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-        
-        # 2. Right Side Projection (Names, Address, NID)
-        # Scan from x=500 to x=1150
-        right_search = thresh[100:700, 500:1150]
-        h_proj = np.sum(right_search, axis=1)
-        
-        # Find peaks (text lines)
-        peaks = []
-        in_peak = False
-        start = 0
-        threshold = np.max(h_proj) * 0.1
-        for i, val in enumerate(h_proj):
-            if val > threshold and not in_peak:
-                in_peak = True
-                start = i
-            elif val < threshold and in_peak:
-                in_peak = False
-                peaks.append((start + 100, i + 100)) # Add vertical offset
-        
-        # 3. Assign fields to peaks
-        # Filter out headers (usually peaks before y=180)
-        content_peaks = [p for p in peaks if p[0] > 170]
-        
-        dynamic_boxes = {}
-        
-        if len(content_peaks) >= 2:
-            # First Name
-            y1, y2 = content_peaks[0]
-            dynamic_boxes["first_name"] = [600, y1-5, 550, (y2-y1)+10]
-            
-            # Full Name
-            y1, y2 = content_peaks[1]
-            dynamic_boxes["full_name"] = [550, y1-5, 600, (y2-y1)+10]
-            
-            # Address (next 1-2 peaks)
-            if len(content_peaks) >= 3:
-                y1_addr, _ = content_peaks[2]
-                _, y2_addr = content_peaks[min(len(content_peaks)-1, 3)]
-                dynamic_boxes["address"] = [550, y1_addr-5, 600, (y2_addr-y1_addr)+10]
-            
-            # National ID (look for peak around y=600)
-            nid_peaks = [p for p in content_peaks if 550 < p[0] < 650]
-            if nid_peaks:
-                y1, y2 = nid_peaks[0]
-                dynamic_boxes["national_id"] = [550, y1-10, 600, (y2-y1)+20]
-        
-        # 4. Left Side (Birth Date, Serial)
-        left_search = thresh[500:750, 40:450]
-        l_proj = np.sum(left_search, axis=1)
-        l_peaks = []
-        in_peak = False
-        start = 0
-        l_thresh = np.max(l_proj) * 0.1 if np.max(l_proj) > 0 else 0
-        for i, val in enumerate(l_proj):
-            if val > l_thresh and not in_peak:
-                in_peak = True
-                start = i
-            elif val < l_thresh and in_peak:
-                in_peak = False
-                l_peaks.append((start + 500, i + 500))
-        
-        if len(l_peaks) >= 2:
-            y1, y2 = l_peaks[0]
-            dynamic_boxes["birth_date"] = [40, y1-10, 420, (y2-y1)+20]
-            y1, y2 = l_peaks[1]
-            dynamic_boxes["serial_number"] = [40, y1-5, 420, (y2-y1)+10]
+        final_boxes = self.FRONT_FIELDS
 
-        # 5. Merge with fallbacks
-        final_boxes = {}
-        for field_name, fixed_coords in self.FRONT_FIELDS.items():
-            if field_name in dynamic_boxes:
-                # Sanity check: if dynamic box is too small or weird, use fixed
-                d_box = dynamic_boxes[field_name]
-                if d_box[3] > 10: # Height check
-                    final_boxes[field_name] = d_box
-                    continue
-            final_boxes[field_name] = fixed_coords
-
-        # 6. Crop
         crops = {}
         for field_name, [x, y, w, h] in final_boxes.items():
             # Constrain to image boundaries
