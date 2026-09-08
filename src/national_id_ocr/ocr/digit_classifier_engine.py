@@ -78,7 +78,13 @@ class DigitClassifierEngine:
 
         candidates = []
         for (x, y, w, h) in boxes:
-            if not (0.5 * median_h <= h <= 1.5 * median_h):
+            # '0' (a small diamond in this font) legitimately renders at
+            # roughly half the height of other digits - a lower bound of
+            # 0.5x median sits right at that boundary and single-pixel
+            # rendering noise was dropping real '0's. 0.35x keeps real
+            # noise (observed ~0.3x median or smaller) filtered while
+            # giving '0' enough margin.
+            if not (0.35 * median_h <= h <= 1.5 * median_h):
                 continue
             if w < 3 or w > h * 1.8:
                 continue

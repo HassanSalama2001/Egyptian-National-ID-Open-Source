@@ -21,6 +21,7 @@ credentials/
 # not committed
 data/synthetic_front/
 data/digits/
+data/digits_v2/
 data/models/
 
 # Node / frontend

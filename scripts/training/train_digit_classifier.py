@@ -20,7 +20,8 @@ import numpy as np
 from PIL import Image
 from skimage.feature import hog
 
-DATA_DIR = Path("data/digits")
+import sys
+DATA_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/digits")
 CLASSES = list("0123456789")
 
 
@@ -169,11 +170,11 @@ def main():
     print("-" * 75)
 
     results = {}
-    svm, acc = bench_sklearn("HOG + Linear SVM", SVC(kernel="linear", C=1.0),
+    svm, acc = bench_sklearn("HOG + Linear SVM", SVC(kernel="linear", C=1.0, class_weight="balanced"),
                               X_train_hog, y_train, X_test_hog, y_test, X_test_img)
     results["svm"] = (svm, acc)
 
-    rf, acc = bench_sklearn("HOG + RandomForest", RandomForestClassifier(n_estimators=100, random_state=42),
+    rf, acc = bench_sklearn("HOG + RandomForest", RandomForestClassifier(n_estimators=100, random_state=42, class_weight="balanced"),
                              X_train_hog, y_train, X_test_hog, y_test, X_test_img)
     results["rf"] = (rf, acc)
 
