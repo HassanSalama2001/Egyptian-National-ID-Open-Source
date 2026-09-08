@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from national_id_ocr.core.pipeline import Pipeline
-from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
+from national_id_ocr.ocr.paddle_ocr_engine import PaddleOCREngine
 
 app = FastAPI(title="Egyptian National ID OCR API")
 
@@ -20,9 +20,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize OCR Engine once
-# Using CPU for portability as requested, but EasyOCR handles GPU if available
-engine = EasyOCREngine(gpu=False)
+# Initialize OCR Engine once - PaddleOCR (mobile det+rec), CPU-only,
+# faster and more accurate than EasyOCR for this task (see
+# ocr/paddle_ocr_engine.py)
+engine = PaddleOCREngine()
 pipeline = Pipeline(ocr_engine=engine)
 
 @app.post("/ocr")

@@ -22,6 +22,15 @@ class Pipeline:
     def __init__(self, ocr_engine: Optional[OCREngine] = None, tesseract_cmd: str = "tesseract"):
         self.detector = CardDetector()
         self.classifier = SideClassifier()
+        if ocr_engine is None:
+            # Both cli.py and api/server.py constructed Pipeline() without
+            # ever passing an ocr_engine, leaving this None - the first
+            # non-numeric field would crash with AttributeError. Default to
+            # PaddleOCR (see ocr/paddle_ocr_engine.py): faster and more
+            # accurate than EasyOCR for this use case, and this makes the
+            # actual production entry points work at all.
+            from ..ocr.paddle_ocr_engine import PaddleOCREngine
+            ocr_engine = PaddleOCREngine()
         self.ocr_engine = ocr_engine
         self.preprocessor = OCRPreprocessor()
         # Numeric fields (national_id, birth_date, serial_number) use a
@@ -114,9 +123,12 @@ class Pipeline:
             self._last_field_confidence = 0.9 if text else 0.0
             return text.strip(), crop_b64
 
-        # Enhancement for OCR
-        enhanced_crop = self._enhance_crop(crop)
-        results = self.ocr_engine.read_layout(enhanced_crop, mode="auto")
+        # PaddleOCR (the default engine) does its own preprocessing and
+        # expects a color image - _enhance_crop's binarization/thresholding
+        # was tuned for EasyOCR and produces a single-channel image that
+        # breaks PaddleOCR's internal pipeline (it expects an (h,w,3) array).
+        # Pass the raw crop directly.
+        results = self.ocr_engine.read_layout(crop, mode="auto")
 
         # Sort results: Top-to-Bottom, then Right-to-Left (for Arabic)
         results.sort(key=lambda r: (np.mean(np.array(r[0])[:, 1]), -np.mean(np.array(r[0])[:, 0])))

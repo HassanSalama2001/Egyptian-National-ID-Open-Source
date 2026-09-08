@@ -21,7 +21,6 @@ import cv2
 from tqdm import tqdm
 
 from national_id_ocr.core.pipeline import Pipeline
-from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
 
 logging.getLogger('national_id_ocr').setLevel(logging.ERROR)
 
@@ -63,8 +62,7 @@ def run_benchmark(dataset_path: str, sample_size: int):
     print(f"Dataset: {dataset_path}  |  Sampling: {len(manifest)} labeled images")
     print("-" * 60)
 
-    engine = EasyOCREngine(gpu=False)
-    pipeline = Pipeline(ocr_engine=engine)
+    pipeline = Pipeline()  # default engine (PaddleOCR) - see pipeline.py
 
     n = len(manifest)
     nid_exact = 0

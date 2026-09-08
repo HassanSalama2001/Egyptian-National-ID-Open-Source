@@ -9,7 +9,6 @@ requires-python = ">=3.10"
 dependencies = [
     "opencv-python-headless",
     "pytesseract",
-    "easyocr",
     "numpy",
     "fastapi",
     "uvicorn[standard]",
@@ -26,6 +25,11 @@ dependencies = [
     "scikit-image",
     "scikit-learn",
     "joblib",
+    # paddle_ocr_engine.py: the default engine for name/address (see
+    # that module's docstring for why - faster and more accurate than
+    # EasyOCR here, once configured with enable_mkldnn=False).
+    "paddlepaddle",
+    "paddleocr",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +39,13 @@ training = [
     "arabic_reshaper",
     "python-bidi",
     "tqdm",
+]
+# EasyOCR (PyTorch) is no longer the default engine (see
+# paddle_ocr_engine.py) - kept only for the benchmark/comparison
+# scripts under tests/ and scripts/ that reference EasyOCREngine
+# directly. Not needed to run the pipeline itself.
+legacy-ocr = [
+    "easyocr",
 ]
 
 [project.scripts]

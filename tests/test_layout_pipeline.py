@@ -1,14 +1,17 @@
 import cv2
 import pytest
 from national_id_ocr.core.pipeline import Pipeline
-from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
 
 
 @pytest.mark.xfail(
     reason=(
-        "Known gap: NID field-crop ROI doesn't reliably capture all 14 "
-        "digits on real (non-synthetic) card photos yet - tracked as part "
-        "of the OCR redesign (lightweight digit recognizer + ROI accuracy)."
+        "Known gap: field-crop boxes are calibrated against "
+        "assets/front_template.jpg (see calibrate_template.py) and the "
+        "synthetic data rendered on it (scripts/training/), where this is "
+        "now 97.3% accurate on held-out samples. A real, differently-"
+        "proportioned photo like assets/front.jpg needs robust per-image "
+        "card alignment before fixed field coordinates transfer - a "
+        "separate, larger problem than what's been tackled so far."
     ),
     strict=False,
 )
@@ -24,8 +27,7 @@ def test_pipeline_extracts_a_valid_checksummed_nid(front_image_path):
     img = cv2.imread(str(front_image_path))
     assert img is not None, f"Could not load {front_image_path}"
 
-    engine = EasyOCREngine(gpu=False)
-    pipeline = Pipeline(ocr_engine=engine)
+    pipeline = Pipeline()  # default engine (PaddleOCR) - see pipeline.py
     result = pipeline.process_image(img)
 
     assert result.front is not None
