@@ -21,6 +21,17 @@ dependencies = [
     "pillow",
 ]
 
+[project.optional-dependencies]
+# Synthetic data generation + model training/benchmarking tooling.
+# Not required to run the OCR pipeline itself.
+training = [
+    "arabic_reshaper",
+    "python-bidi",
+    "tqdm",
+    "scikit-learn",
+    "scikit-image",
+]
+
 [project.scripts]
 nid-ocr = "national_id_ocr.cli:app"
 

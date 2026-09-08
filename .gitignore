@@ -15,6 +15,10 @@ venv/
 credentials/
 *credentials*
 
+# Generated synthetic training/benchmark data - reproducible via
+# scripts/training/generate_trial_ids.py (fixed seed=42), not committed
+data/synthetic_front/
+
 # Node / frontend
 node_modules/
 dist/

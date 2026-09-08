@@ -80,6 +80,25 @@ def decode_national_id(nid: str) -> Optional[NationalIDDecoded]:
         logger.debug(f"decode_national_id failed for {nid!r}: {e}")
         return None
 
+NID_CHECKSUM_WEIGHTS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4]
+
+
+def compute_nid_check_digit(first_13_digits: str) -> int:
+    """
+    Computes the 14th (check) digit for the first 13 digits of an Egyptian
+    National ID using the Mod-11 algorithm. Shared by validate_nid_checksum
+    (verification) and the synthetic data generator (so generated samples
+    carry a real, verifiable checksum instead of a placeholder digit).
+    """
+    if len(first_13_digits) != 13 or not first_13_digits.isdigit():
+        raise ValueError("Expected exactly 13 digits")
+
+    digits = [int(d) for d in first_13_digits]
+    checksum = sum(d * w for d, w in zip(digits, NID_CHECKSUM_WEIGHTS))
+    calculated_digit = checksum % 11
+    return 0 if calculated_digit == 10 else calculated_digit
+
+
 def validate_nid_checksum(nid: str) -> bool:
     """
     Validates the 14th digit of the Egyptian National ID using the Mod-11 algorithm.
@@ -87,19 +106,8 @@ def validate_nid_checksum(nid: str) -> bool:
     """
     if not nid or len(nid) != 14 or not nid.isdigit():
         return False
-    
-    weights = [2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4]
-    digits = [int(d) for d in nid]
-    
-    checksum = 0
-    for i in range(13):
-        checksum += digits[i] * weights[i]
-    
-    calculated_digit = checksum % 11
-    if calculated_digit == 10:
-        calculated_digit = 0
-        
-    return calculated_digit == digits[13]
+
+    return compute_nid_check_digit(nid[:13]) == int(nid[13])
 
 def repair_nid(noisy_nid: str) -> Optional[str]:
     """

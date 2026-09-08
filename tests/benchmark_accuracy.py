@@ -1,102 +1,120 @@
-import os
-import cv2
-import time
-import logging
+"""
+Real accuracy benchmark against labeled synthetic data.
+
+Unlike the old version of this script (which only checked "is the output
+14 characters long" - a check that a wrong digit or a stray letter can
+still pass), this compares extracted values against known-correct ground
+truth from scripts/training/generate_trial_ids.py's manifest.json.
+
+Usage:
+    python scripts/training/generate_trial_ids.py --count 200   # if needed
+    python tests/benchmark_accuracy.py --dataset data/synthetic_front
+"""
 import argparse
+import json
+import logging
+import os
+import time
+from pathlib import Path
+
+import cv2
 from tqdm import tqdm
+
 from national_id_ocr.core.pipeline import Pipeline
 from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
 
-# Disable logging for cleaner output
 logging.getLogger('national_id_ocr').setLevel(logging.ERROR)
 
-def run_benchmark(dataset_path, sample_size=50):
-    print(f"Starting Accuracy Overhaul Benchmark...")
-    print(f"Dataset: {dataset_path}")
-    print(f"Sampling: {sample_size} images")
-    print("-" * 50)
 
-    # Initialize Pipeline with EasyOCR
-    engine = EasyOCREngine(gpu=False)
-    pipeline = Pipeline(ocr_engine=engine)
+def levenshtein(a: str, b: str) -> int:
+    if len(a) < len(b):
+        a, b = b, a
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb))
+        prev = cur
+    return prev[-1]
 
-    # Get image list
-    all_images = [f for f in os.listdir(dataset_path) if f.endswith(('.png', '.jpg', '.jpeg'))]
+
+def char_accuracy(expected: str, actual: str) -> float:
+    if not expected:
+        return 1.0 if not actual else 0.0
+    dist = levenshtein(expected, actual or "")
+    return max(0.0, 1.0 - dist / len(expected))
+
+
+def run_benchmark(dataset_path: str, sample_size: int):
+    manifest_path = Path(dataset_path) / "manifest.json"
+    if not manifest_path.exists():
+        raise SystemExit(
+            f"No manifest.json in {dataset_path}. Generate labeled data first:\n"
+            f"  python scripts/training/generate_trial_ids.py --count {sample_size or 200} "
+            f"--output {dataset_path}"
+        )
+    manifest = json.load(open(manifest_path, encoding="utf-8"))
+
     if sample_size > 0:
         import random
         random.seed(42)
-        images = random.sample(all_images, min(sample_size, len(all_images)))
-    else:
-        images = all_images
+        manifest = random.sample(manifest, min(sample_size, len(manifest)))
 
-    stats = {
-        "total": len(images),
-        "nid_extracted": 0,
-        "side_detected": 0,
-        "total_time_ms": 0,
-        "errors": 0
-    }
+    print(f"Dataset: {dataset_path}  |  Sampling: {len(manifest)} labeled images")
+    print("-" * 60)
 
-    results = []
+    engine = EasyOCREngine(gpu=False)
+    pipeline = Pipeline(ocr_engine=engine)
 
-    for img_name in tqdm(images, desc="Processing"):
-        img_path = os.path.join(dataset_path, img_name)
-        image = cv2.imread(img_path)
-        
+    n = len(manifest)
+    nid_exact = 0
+    nid_checksum_valid = 0
+    name_acc_sum = 0.0
+    address_acc_sum = 0.0
+    total_time_ms = 0.0
+    errors = 0
+
+    for entry in tqdm(manifest, desc="Benchmarking"):
+        img_path = Path(dataset_path) / entry["filename"]
+        image = cv2.imread(str(img_path))
         if image is None:
-            stats["errors"] += 1
+            errors += 1
             continue
 
+        gt = entry["data"]
+        start = time.time()
         try:
-            start_time = time.time()
             result = pipeline.process_image(image)
-            latency = (time.time() - start_time) * 1000
-            
-            stats["total_time_ms"] += latency
-            
-            nid = None
-            if result.front and result.front.national_id:
-                nid = result.front.national_id
-            elif result.back and result.back.national_id:
-                nid = result.back.national_id
-                
-            success = nid is not None and len(nid) == 14
-            if success:
-                stats["nid_extracted"] += 1
-            
-            if result.side != "unknown":
-                stats["side_detected"] += 1
-                
-            results.append({
-                "name": img_name,
-                "success": success,
-                "nid": nid,
-                "side": result.side,
-                "latency": latency
-            })
-            
-        except Exception as e:
-            stats["errors"] += 1
+        except Exception:
+            errors += 1
+            continue
+        total_time_ms += (time.time() - start) * 1000
 
-    # Print Report
-    print("-" * 50)
-    print("Benchmark Complete!")
-    print(f"National ID Extraction Rate: {(stats['nid_extracted']/stats['total'])*100:.2f}%")
-    print(f"Side Detection Rate: {(stats['side_detected']/stats['total'])*100:.2f}%")
-    print(f"Avg Latency: {stats['total_time_ms']/stats['total']:.2f} ms")
-    print(f"Errors: {stats['errors']}")
-    print("-" * 50)
+        front = result.front
+        extracted_nid = front.national_id if front else None
 
-    # Print some successful examples
-    print("\nSample Extractions:")
-    successes = [r for r in results if r['success']][:5]
-    for s in successes:
-        print(f"  - {s['name']}: {s['nid']} ({s['side']})")
+        if extracted_nid == gt["national_id"]:
+            nid_exact += 1
+        if result.decoded is not None:
+            nid_checksum_valid += 1
+
+        name_acc_sum += char_accuracy(gt["full_name"], front.full_name if front else "")
+        address_acc_sum += char_accuracy(gt["address"], front.address if front else "")
+
+    print("-" * 60)
+    print("Results (against ground truth, not just shape checks):")
+    print(f"  National ID exact match:     {nid_exact}/{n}  ({nid_exact/n*100:.1f}%)")
+    print(f"  National ID checksum valid:  {nid_checksum_valid}/{n}  ({nid_checksum_valid/n*100:.1f}%)")
+    print(f"  Full name char accuracy:     {name_acc_sum/n*100:.1f}%  (avg, Levenshtein-based)")
+    print(f"  Address char accuracy:       {address_acc_sum/n*100:.1f}%  (avg, Levenshtein-based)")
+    print(f"  Avg latency:                 {total_time_ms/n:.1f} ms")
+    print(f"  Errors:                      {errors}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="assets/dataset")
-    parser.add_argument("--sample", type=int, default=20)
+    parser.add_argument("--dataset", default="data/synthetic_front")
+    parser.add_argument("--sample", type=int, default=100)
     args = parser.parse_args()
-    
+
     run_benchmark(args.dataset, args.sample)
