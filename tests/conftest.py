@@ -9,11 +9,16 @@ def assets_dir():
 
 @pytest.fixture
 def front_image_path(assets_dir):
-    return assets_dir / "front.jpg"
+    # A real photo of Hassan's own ID (assets/front.jpg) was previously
+    # used here and has been scrubbed from the repo/history entirely -
+    # never reintroduce a real card image as a test fixture. This points
+    # to a synthetic, non-identifying sample from the augmented dataset
+    # instead (see assets/dataset/).
+    return assets_dir / "dataset" / "ID0.png"
 
 @pytest.fixture
 def back_image_path(assets_dir):
-    return assets_dir / "back.jpg"
+    return assets_dir / "dataset" / "IDB0.png"
 
 @pytest.fixture
 def template_image_path(assets_dir):

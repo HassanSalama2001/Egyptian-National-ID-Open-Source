@@ -15,6 +15,16 @@ venv/
 credentials/
 *credentials*
 
+# Real ID card photos - never commit these. assets/front.jpg and
+# assets/back.jpg (Hassan's own real card) were previously committed and
+# have been scrubbed from history; this guards against re-adding a real
+# card image by accident. Only assets/dataset/ (synthetic) and
+# assets/*template*/*Egyptian_ID_Card* (blank template) belong in git.
+assets/front.jpg
+assets/back.jpg
+detected_front.jpg
+detected_back.jpg
+
 # Generated synthetic training/benchmark data and trained models -
 # reproducible via scripts/training/generate_trial_ids.py,
 # generate_digit_crops.py, train_digit_classifier.py (fixed seed=42),
