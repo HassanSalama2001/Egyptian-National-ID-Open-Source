@@ -47,3 +47,8 @@ class IDCard(BaseModel):
     # Plain-language, non-technical messages a UI can show directly to an
     # end user - never a stack trace or internal field/variable name.
     messages: list[str] = Field(default_factory=list)
+    # Base64 JPEG of the rectified whole-card image (post alignment/
+    # perspective-correction), for a UI to show "here's the card we
+    # detected" alongside the individual field_crops - the same
+    # transparency idea, one level up.
+    card_image: Optional[str] = Field(None, description="Base64-encoded rectified card image")

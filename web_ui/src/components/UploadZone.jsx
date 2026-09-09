@@ -1,119 +1,62 @@
-import React, { useState, useRef } from 'react';
+import { useRef, useState } from 'react'
 
-const UploadZone = ({ onFileSelect, progress, isUploading }) => {
-  const [isDragActive, setIsDragActive] = useState(false);
-  const fileInputRef = useRef(null);
+export default function UploadZone({ onFileSelect, isUploading }) {
+  const [isDragActive, setIsDragActive] = useState(false)
+  const inputRef = useRef(null)
 
   const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setIsDragActive(true);
-    } else if (e.type === "dragleave") {
-      setIsDragActive(false);
-    }
-  };
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(e.type === 'dragenter' || e.type === 'dragover')
+  }
 
   const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      onFileSelect(e.dataTransfer.files[0]);
-    }
-  };
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) onFileSelect(file)
+  }
 
   return (
-    <div 
-      className={`glass-panel upload-container ${isDragActive ? 'neon-border active' : ''}`}
+    <div
+      onClick={() => !isUploading && inputRef.current?.click()}
       onDragEnter={handleDrag}
-      onDragLeave={handleDrag}
       onDragOver={handleDrag}
+      onDragLeave={handleDrag}
       onDrop={handleDrop}
-      onClick={() => fileInputRef.current.click()}
+      className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed
+        px-8 py-16 text-center transition-colors cursor-pointer
+        ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-white hover:border-slate-400'}
+        ${isUploading ? 'pointer-events-none opacity-60' : ''}`}
     >
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={(e) => onFileSelect(e.target.files[0])} 
-        style={{ display: 'none' }} 
+      <input
+        ref={inputRef}
+        type="file"
         accept="image/*"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && onFileSelect(e.target.files[0])}
       />
-      
-      {!isUploading ? (
-        <div className="upload-content">
-          <div className="upload-icon">⚡</div>
-          <h2 className="neon-text">Initiate Scan</h2>
-          <p>Drop identity file or click to browse</p>
-          <div className="tech-hint">[ JPEG / PNG / TIFF ]</div>
-        </div>
+
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+      </div>
+
+      {isUploading ? (
+        <p className="text-sm font-medium text-slate-500">Processing your photo…</p>
       ) : (
-        <div className="upload-progress">
-          <div className="progress-info">
-            <span className="pulse">Syncing with Node...</span>
-            <span className="percentage">{progress}%</span>
-          </div>
-          <div className="progress-bar-container">
-            <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
-          </div>
-        </div>
+        <>
+          <p className="text-base font-medium text-slate-700">
+            Drop a photo of the ID card here, or click to browse
+          </p>
+          <p className="text-sm text-slate-400">
+            For best results, frame the card so it fills the photo — like the guides in most banking apps
+          </p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">JPG or PNG</p>
+        </>
       )}
-
-      <style jsx>{`
-        .upload-container {
-          padding: 60px;
-          text-align: center;
-          cursor: pointer;
-          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          min-height: 250px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 40px;
-        }
-        .upload-container.active {
-          transform: scale(1.02);
-          background: rgba(0, 243, 255, 0.05);
-        }
-        .upload-icon {
-          font-size: 48px;
-          margin-bottom: 20px;
-        }
-        .tech-hint {
-          font-size: 10px;
-          letter-spacing: 3px;
-          margin-top: 20px;
-          opacity: 0.5;
-        }
-        .upload-progress {
-          width: 100%;
-        }
-        .progress-info {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 10px;
-          font-family: monospace;
-          font-size: 14px;
-        }
-        .progress-bar-container {
-          height: 4px;
-          background: rgba(255,255,255,0.05);
-          width: 100%;
-          border-radius: 2px;
-          overflow: hidden;
-        }
-        .progress-bar-fill {
-          height: 100%;
-          background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
-          box-shadow: 0 0 10px var(--accent-cyan);
-          transition: width 0.3s ease;
-        }
-        .pulse {
-          animation: pulse 1.5s infinite;
-        }
-      `}</style>
     </div>
-  );
-};
-
-export default UploadZone;
+  )
+}

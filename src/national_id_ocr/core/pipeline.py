@@ -112,7 +112,9 @@ class Pipeline:
             # 1. Detect & Align Card (Warp to 1200x750)
             analyzer = LayoutAnalyzer()
             rectified, M = analyzer.align_card(image)
-            
+            _, card_buffer = cv2.imencode('.jpg', rectified)
+            result.card_image = f"data:image/jpeg;base64,{base64.b64encode(card_buffer).decode('utf-8')}"
+
             # 2. Classify Side
             side = self.classifier.classify(rectified)
             result.side = side.value
