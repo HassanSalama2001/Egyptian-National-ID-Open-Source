@@ -13,6 +13,7 @@ from ..ocr.digit_classifier_engine import DigitClassifierEngine
 from ..postprocessing.numeral_converter import normalize_arabic_numerals, clean_ocr_text
 from ..postprocessing.national_id_parser import decode_national_id, find_nid_in_text
 from ..models.id_card import IDCard, IDCardFront, IDCardBack
+from ..models.enums import ExtractionStatus
 from .layout_analyzer import LayoutAnalyzer
 from .field_clusterer import FieldClusterer
 
@@ -38,10 +39,71 @@ class Pipeline:
         # OCR engine - see ocr/digit_classifier_engine.py for why.
         self.digit_engine = DigitClassifierEngine()
 
+    # Tried in this order because align_card's contour-based detection can
+    # itself be orientation-sensitive (a portrait photo of a landscape card
+    # rarely produces a plausible card-shaped contour), so we can't rely on
+    # it alone to notice the image is sideways.
+    ROTATIONS_TO_TRY = [
+        (None, "0°"),
+        (cv2.ROTATE_90_CLOCKWISE, "90°"),
+        (cv2.ROTATE_180, "180°"),
+        (cv2.ROTATE_90_COUNTERCLOCKWISE, "270°"),
+    ]
+
     def process_image(self, image: np.ndarray) -> IDCard:
         """
-        Executes the classical CV-based pipeline (Alignment -> Fixed Boxing -> Extraction).
+        Input contract: expects a well-framed card image - the card
+        filling (or nearly filling) the frame, as a guided-crop UI would
+        produce (user aligns the card to an on-screen outline before
+        submitting), NOT an unconstrained photo of a card sitting on an
+        arbitrary background. This is a deliberate scope decision, not an
+        oversight: align_card's contour-based detection for the latter
+        case has a known bug (see scripts/training/generate_realistic_
+        photos.py's docstring) and free-form document detection is a
+        substantially harder, separate problem. Accuracy figures (98%+ on
+        data/synthetic_front/) only hold for well-framed input.
+
+        Tries the image at 0/90/180/270 degree rotations (see
+        ROTATIONS_TO_TRY) and returns the best result - this covers "the
+        card is framed correctly but the photo itself is sideways/upside
+        down" (e.g. phone held in a different orientation), which a
+        guided-crop UI does not otherwise prevent. A checksum-valid
+        National ID is a hard correctness signal, so the first rotation
+        that produces one is returned immediately without trying the rest -
+        the common case (already-upright photo) stays a single fast pass.
+        Otherwise, the highest-confidence attempt across all four is
+        returned so there's always *some* result with an honest status/
+        message, rather than silently only ever trying one orientation.
         """
+        overall_start = time.time()
+
+        if image is None or image.size == 0:
+            result = IDCard()
+            result.status = ExtractionStatus.UNREADABLE_IMAGE
+            result.messages = [
+                "This file couldn't be read as an image. Please upload a "
+                "clear JPG or PNG photo of the ID card."
+            ]
+            result.processing_time_ms = int((time.time() - overall_start) * 1000)
+            return result
+
+        best_result: Optional[IDCard] = None
+        for rotation, label in self.ROTATIONS_TO_TRY:
+            attempt_image = cv2.rotate(image, rotation) if rotation is not None else image
+            result = self._process_single_orientation(attempt_image)
+            logger.debug(f"Orientation {label}: status={result.status} confidence={result.confidence:.2f}")
+
+            if result.decoded is not None:
+                result.processing_time_ms = int((time.time() - overall_start) * 1000)
+                return result
+
+            if best_result is None or result.confidence > best_result.confidence:
+                best_result = result
+
+        best_result.processing_time_ms = int((time.time() - overall_start) * 1000)
+        return best_result
+
+    def _process_single_orientation(self, image: np.ndarray) -> IDCard:
         start_time = time.time()
         result = IDCard()
         field_confidences: List[float] = []
@@ -93,12 +155,38 @@ class Pipeline:
                 result.confidence = ocr_confidence
             else:
                 result.confidence = min(ocr_confidence, 0.3)
-            
+
+            # Plain-language status for a UI to key off of directly, instead
+            # of inferring quality from confidence thresholds or null-
+            # checking fields itself.
+            if result.decoded is not None:
+                result.status = ExtractionStatus.SUCCESS
+                result.messages = ["National ID extracted and verified successfully."]
+            elif result.front is not None:
+                result.status = ExtractionStatus.LOW_CONFIDENCE
+                result.messages = [
+                    "We found a card but couldn't fully verify the National "
+                    "ID number. Please check the extracted data carefully, "
+                    "or try again with a clearer, well-lit photo."
+                ]
+            else:
+                result.status = ExtractionStatus.NO_CARD_DETECTED
+                result.messages = [
+                    "We couldn't find an ID card in this image. Make sure "
+                    "the whole card is visible, in focus, and well-lit, "
+                    "then try again."
+                ]
+
         except Exception as e:
             logger.error(f"Pipeline processing failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            
+            result.status = ExtractionStatus.NO_CARD_DETECTED
+            result.messages = [
+                "Something went wrong while processing this image. Please "
+                "try again with a different photo."
+            ]
+
         result.processing_time_ms = int((time.time() - start_time) * 1000)
         return result
 

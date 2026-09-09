@@ -62,38 +62,54 @@ def extract(
 
 @app.command()
 def doctor():
-    """Verify system dependencies (Tesseract, OpenCV, etc.)"""
+    """Verify system dependencies (PaddleOCR, OpenCV, digit classifier model, etc.)"""
     console.print("[bold cyan]Egyptian National ID OCR — System Check[/bold cyan]")
-    
-    # 1. Check Tesseract
-    tess_path = settings.TESSERACT_CMD
-    import shutil
-    is_found = shutil.which(tess_path) or (os.path.exists(tess_path) if os.name == 'nt' else False)
-    
-    if is_found:
-        console.print(f"[OK] Tesseract found: [green]{tess_path}[/green]")
-    else:
-        console.print("[FAIL] [red]Tesseract Not Found![/red]")
-        console.print("\n[bold yellow]How to install Tesseract:[/bold yellow]")
-        console.print("  - [bold]Windows:[/bold] Download from: https://github.com/UB-Mannheim/tesseract/wiki")
-        console.print("  - [bold]Linux:[/bold] sudo apt install tesseract-ocr tesseract-ocr-ara")
-        console.print("  - [bold]Mac:[/bold] brew install tesseract tesseract-lang")
-        console.print("\n[dim]Note: Ensure you include the 'Arabic' language data during installation.[/dim]")
 
-    # 2. Check Python Dependencies
+    all_ok = True
+
+    # 1. Core CV/ML dependencies
     try:
         import cv2
         console.print(f"[OK] OpenCV found: [green]{cv2.__version__}[/green]")
     except ImportError:
         console.print("[FAIL] [red]OpenCV not found.[/red] Run: pip install opencv-python-headless")
+        all_ok = False
 
+    # 2. PaddleOCR - the default engine for name/address (see
+    # ocr/paddle_ocr_engine.py)
     try:
-        import easyocr
-        console.print("[OK] EasyOCR found")
+        import paddleocr
+        console.print(f"[OK] PaddleOCR found: [green]{paddleocr.__version__}[/green]")
     except ImportError:
-        console.print("[WARN] [yellow]EasyOCR not found (Optional fallback).[/yellow]")
+        console.print("[FAIL] [red]PaddleOCR not found.[/red] Run: pip install -e .")
+        all_ok = False
 
-    console.print("\n[bold]Ready to initiate scan sessions![/bold]")
+    # 3. Digit classifier model (national_id/serial_number/birth_date)
+    from pathlib import Path
+    model_path = Path(__file__).parent / "ocr" / "models" / "digit_classifier_svm.joblib"
+    if model_path.exists():
+        console.print(f"[OK] Digit classifier model found: [green]{model_path.name}[/green]")
+    else:
+        console.print(
+            "[FAIL] [red]Digit classifier model not found.[/red] "
+            "Train it: python scripts/training/train_digit_classifier.py"
+        )
+        all_ok = False
+
+    # 4. Tesseract - optional, only used by the (non-default) TesseractEngine
+    tess_path = settings.TESSERACT_CMD
+    import shutil
+    is_found = shutil.which(tess_path) or (os.path.exists(tess_path) if os.name == 'nt' else False)
+    if is_found:
+        console.print(f"[OK] Tesseract found (optional, not the default engine): [green]{tess_path}[/green]")
+    else:
+        console.print("[dim]Tesseract not found - fine, it's an optional alternate engine, not the default.[/dim]")
+
+    console.print()
+    if all_ok:
+        console.print("[bold green]Ready to initiate scan sessions![/bold green]")
+    else:
+        console.print("[bold red]Some required dependencies are missing - see above.[/bold red]")
 
 if __name__ == "__main__":
     app()

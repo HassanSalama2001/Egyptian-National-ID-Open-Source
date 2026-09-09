@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 from pydantic import BaseModel, Field
-from .enums import Gender, Religion, MaritalStatus, Governorate
+from .enums import Gender, Religion, MaritalStatus, Governorate, ExtractionStatus
 
 class NationalIDDecoded(BaseModel):
     birth_date: Optional[str] = None
@@ -37,9 +37,13 @@ class IDCardBack(BaseModel):
     raw_arabic: dict[str, str] = Field(default_factory=dict)
 
 class IDCard(BaseModel):
-    side: str = "unknown" 
+    side: str = "unknown"
     front: Optional[IDCardFront] = None
     back: Optional[IDCardBack] = None
     decoded: Optional[NationalIDDecoded] = None
     confidence: float = 0.0
     processing_time_ms: int = 0
+    status: ExtractionStatus = ExtractionStatus.NO_CARD_DETECTED
+    # Plain-language, non-technical messages a UI can show directly to an
+    # end user - never a stack trace or internal field/variable name.
+    messages: list[str] = Field(default_factory=list)

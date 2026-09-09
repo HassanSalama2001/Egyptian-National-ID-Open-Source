@@ -1,5 +1,13 @@
 from enum import Enum
 
+class ExtractionStatus(str, Enum):
+    """Overall outcome, for a UI to key off of directly rather than
+    inferring quality from confidence thresholds or null-checking fields."""
+    SUCCESS = "success"                # NID checksum validated
+    LOW_CONFIDENCE = "low_confidence"  # got a result, but checksum didn't validate
+    NO_CARD_DETECTED = "no_card_detected"  # couldn't find a card-like region at all
+    UNREADABLE_IMAGE = "unreadable_image"  # file couldn't be decoded as an image
+
 class Gender(str, Enum):
     MALE = "male"
     FEMALE = "female"
