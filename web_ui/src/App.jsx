@@ -1,15 +1,21 @@
 import { useState } from 'react'
 import UploadZone from './components/UploadZone'
+import CameraCapture from './components/CameraCapture'
 import ResultsView from './components/ResultsView'
 import { extractIdCard } from './api'
 
 export default function App() {
+  const [captureMode, setCaptureMode] = useState('upload') // 'upload' | 'camera'
   const [originalImage, setOriginalImage] = useState(null)
   const [result, setResult] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState(null)
 
+  // Handles a File from either source (picked/dropped, or captured from
+  // the camera and wrapped into a File by CameraCapture) identically -
+  // the rest of the app doesn't need to know which one produced it.
   const handleFileSelect = async (file) => {
+    setCaptureMode('upload')
     setOriginalImage(URL.createObjectURL(file))
     setResult(null)
     setError(null)
@@ -25,6 +31,7 @@ export default function App() {
   }
 
   const reset = () => {
+    setCaptureMode('upload')
     setOriginalImage(null)
     setResult(null)
     setError(null)
@@ -43,8 +50,14 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
-        {!originalImage ? (
-          <UploadZone onFileSelect={handleFileSelect} isUploading={isUploading} />
+        {captureMode === 'camera' ? (
+          <CameraCapture onCapture={handleFileSelect} onCancel={() => setCaptureMode('upload')} />
+        ) : !originalImage ? (
+          <UploadZone
+            onFileSelect={handleFileSelect}
+            isUploading={isUploading}
+            onUseCamera={() => setCaptureMode('camera')}
+          />
         ) : isUploading ? (
           <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-16">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
