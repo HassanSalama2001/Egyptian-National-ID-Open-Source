@@ -10,6 +10,7 @@ approximate real photo conditions (rotation, blur, noise, contrast,
 JPEG compression) so the classifier isn't just memorizing clean renders.
 """
 import argparse
+import os
 import random
 from pathlib import Path
 
@@ -18,7 +19,19 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 WESTERN_TO_ARABIC_INDIC = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+
+# Tahoma is a hardcoded Windows path (Linux/Mac have no equivalent), but
+# unlike generate_trial_ids.py's font (fixed to always use a bundled font,
+# after CI caught this exact hardcoded-path pattern breaking outright on
+# Linux), it is NOT simply swapped for a bundled one here. See the
+# comment below the fallback: this script's whole font choice already
+# went through a measured revert away from calligraphic Naskh-style
+# fonts (which the bundled fallback also is), so a Linux user retraining
+# the digit classifier gets a WORKING but explicitly UNVERIFIED
+# substitute, not a silent "equivalent" one.
 FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"
+if not os.path.exists(FONT_PATH):
+    FONT_PATH = str(Path(__file__).resolve().parent.parent.parent / "assets" / "fonts" / "Amiri-Bold.ttf")
 # Tried Simplified Arabic Bold here after visually confirming it's a much
 # closer glyph-shape match to a real card than Tahoma - and it DID fix
 # the persistent '٣' -> '٢' misread. But real-card retesting then showed

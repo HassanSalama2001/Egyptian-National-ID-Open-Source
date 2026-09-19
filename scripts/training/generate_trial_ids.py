@@ -121,8 +121,20 @@ def _back_fields_from_analyzer() -> dict:
 
 BACK_FIELDS = _back_fields_from_analyzer()
 
-FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"
-FONT_PATH_FALLBACK = "C:/Windows/Fonts/tahoma.ttf"
+# Bundled (assets/fonts/, Amiri - OFL licensed, see assets/fonts/OFL.txt),
+# not an OS font path. This used to hardcode "C:/Windows/Fonts/tahoma*.ttf" -
+# which not only doesn't exist on Linux/Mac (this generator is now part of
+# the automated test suite via tests/conftest.py's synthetic_card_sample
+# fixture, and CI's first real run on a Linux runner failed outright on
+# this), it also meant "seeded generation is reproducible" was only true
+# ON WINDOWS: two contributors on different OSes, or the same seed run
+# locally vs. in CI, were never guaranteed to render identical pixels,
+# since nothing pinned WHICH font file Tahoma even resolved to. Bundling
+# the font makes both problems the same fix: one specific file, present
+# and identical everywhere this repository is cloned.
+FONT_DIR = PROJECT_ROOT / "assets" / "fonts"
+FONT_PATH = str(FONT_DIR / "Amiri-Bold.ttf")
+FONT_PATH_FALLBACK = str(FONT_DIR / "Amiri-Regular.ttf")
 # A per-field-type font split (Simplified Arabic Bold for digits only)
 # was tried and reverted - see generate_digit_crops.py's FONT_PATH for
 # the full story (a closer glyph-shape match to a real card, but with its

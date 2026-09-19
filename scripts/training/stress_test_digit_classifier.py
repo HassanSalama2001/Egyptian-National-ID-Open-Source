@@ -8,8 +8,10 @@ The in-distribution test set tied all 3 candidates at 100% - not a real
 signal, just an easy benchmark. This is the real tiebreaker: which one
 generalizes best when conditions are worse than training saw.
 """
+import os
 import random
 import time
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -20,7 +22,15 @@ from PIL import Image, ImageFont, ImageDraw, ImageFilter
 from skimage.feature import hog
 
 WESTERN_TO_ARABIC_INDIC = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
-FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"  # see generate_digit_crops.py for why this stayed Tahoma
+# See generate_digit_crops.py for why this stayed Tahoma rather than
+# switching to the bundled font outright (a measured, reverted regression
+# with calligraphic Naskh-style fonts for THIS specific digit-glyph use
+# case) - falls back only when Tahoma genuinely isn't there (non-Windows),
+# same as generate_digit_crops.py, and with the same caveat: unverified
+# against this file's own accuracy comparisons.
+FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"
+if not os.path.exists(FONT_PATH):
+    FONT_PATH = str(Path(__file__).resolve().parent.parent.parent / "assets" / "fonts" / "Amiri-Bold.ttf")
 CANVAS = 64
 
 

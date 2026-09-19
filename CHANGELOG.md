@@ -9,7 +9,51 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
-### Fixed (post-push)
+### Fixed (post-push, round 2)
+CI's second run failed on a third real bug, in `scripts/training/
+generate_trial_ids.py`: `FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"` -
+a hardcoded Windows path that always existed, but only became
+CI-blocking once the Phase 3 hygiene pass made the whole test suite
+depend on this generator (via `tests/conftest.py`'s
+`synthetic_card_sample` fixture, replacing the retired
+`assets/dataset/`). GitHub's Linux runners have no such path, so every
+synthetic-card-dependent test failed with `OSError: cannot open
+resource`.
+
+Fixed by bundling an open-source Arabic font (`assets/fonts/`, Amiri,
+SIL Open Font License - see `assets/fonts/OFL.txt`) directly in the
+repo, rather than depending on any OS's installed fonts. This also
+fixes a subtler, pre-existing problem: "seeded generation is
+reproducible" was never actually true across machines - nothing pinned
+which font file "Tahoma" even resolved to, so the same seed could
+render different pixels on different Windows installs, let alone
+across OSes. A single bundled file is identical everywhere this
+repository is cloned.
+
+Verified the font swap doesn't regress accuracy before treating it as
+safe: 5 seeded synthetic cards, national ID 5/5, first_name 4/5,
+full_name 5/5, serial_number 5/5. The one systematic mismatch
+(`address`, 0/5 - missing a "-" separator) was proven pre-existing and
+font-independent via direct A/B against the original Tahoma font on the
+same seed (identical omission with or without the font change) -
+already documented as a known gap in `docs/LIMITATIONS.md`.
+
+The digit-classifier training tooling (`generate_digit_crops.py`,
+`stress_test_digit_classifier.py`) keeps Tahoma as its default when
+available rather than switching outright: their own code comments
+already document a measured, reverted regression with calligraphic
+Naskh-style fonts (which the bundled fallback also is) specifically for
+isolated digit glyphs, so the bundled font is used there only as an
+explicitly-unverified last resort for a non-Windows contributor, not
+treated as equivalent.
+
+Given two failed pushes already, this fix was verified in an actual
+Linux container (Docker, `python:3.11-slim`, matching CI's Python
+version) before pushing again, not just locally on Windows a third
+time: 85 passed, 4 skipped (one more skip than Windows' 3 - the
+Windows-only encoding test correctly skips on Linux), 6 xfailed.
+
+### Fixed (post-push, round 1)
 CI's actual first run on GitHub's runners (unverifiable locally - see
 the Phase 2 entry above) failed on push, in all 4 jobs. Root causes,
 found from the real run logs rather than guessed:
