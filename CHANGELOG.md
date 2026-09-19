@@ -10,6 +10,16 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 ## [Unreleased]
 
 ### Added
+- `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
+- `tests/test_privacy_no_network.py`: blocks real outbound network
+  connections during a `process_image()` call and fails if one is
+  attempted - the project's central "extraction is fully local" claim,
+  checked directly instead of only asserted in the README.
+- CI (`.github/workflows/ci.yml`): pytest across Python 3.10-3.12, plus
+  a dedicated job that builds the wheel and installs it into a clean
+  venv (`tests/test_packaging.py`, the same check done manually for
+  Phase 0). Runs against synthetic data only - the private benchmark
+  never reaches CI, by design.
 - `MAX_PROCESSING_SECONDS` (45s) hard wall-clock ceiling on one
   extraction, checked between rotation attempts and before entering the
   numeric offset-retry ladder, the free-text fallback, and the free-text

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Every job below runs against SYNTHETIC data only. The maintainer's own
+# card benchmark (assets/own_benchmark/, tests/test_own_benchmark.py) is
+# gitignored and never reaches CI - those tests skip themselves when the
+# folder is absent, which is expected and correct here, not a gap.
+#
+# Model downloads during `pip install`/first PaddleOCR init DO need
+# network access - that's a one-time setup step, separate from the
+# privacy claim tests/test_privacy_no_network.py actually enforces (no
+# outbound connection during a process_image() call, i.e. per extraction).
+
+jobs:
+  test:
+    name: test (python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package
+        run: pip install -e ".[mcp,training]"
+
+      - name: Run test suite
+        run: python -m pytest tests -q
+
+  packaging:
+    name: wheel installs and runs standalone
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Build wheel, install into a clean venv, run the CLI
+        env:
+          RUN_PACKAGING_TEST: "1"
+        run: python -m pytest tests/test_packaging.py -v
