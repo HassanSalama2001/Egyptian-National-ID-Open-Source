@@ -9,6 +9,26 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
+### Added
+- `MAX_PROCESSING_SECONDS` (45s) hard wall-clock ceiling on one
+  extraction, checked between rotation attempts and before entering the
+  numeric offset-retry ladder, the free-text fallback, and the free-text
+  rescan pass - not just at the outer loop, since the combinatorial cost
+  lives inside those ladders. Measured on a real failure: an image that
+  defeated card detection took 175s before this existed (a
+  denial-of-service surface on a public API/MCP endpoint), and 45-50s
+  after. Verified against the maintainer's own benchmark to add zero
+  regression on any scan that already worked (worst real case measured
+  at 25.1s, well under the 45s budget).
+- Configurable CORS allowlist (`NID_CORS_ALLOWED_ORIGINS`) replacing
+  `allow_origins=["*"]`, which combined with `allow_credentials=True`
+  let any website's JavaScript call the API using the visiting browser's
+  own credentials.
+- Upload size cap on `/ocr` (`NID_MAX_UPLOAD_SIZE_MB`, default 15),
+  enforced by reading in bounded chunks and aborting mid-stream rather
+  than checking after buffering the whole body - which would not have
+  bounded memory for an attacker who just sends more bytes.
+
 ### Fixed
 - The built wheel did not contain the trained digit classifier or the
   detection templates - setuptools' default file finder collects `.py`

@@ -10,16 +10,18 @@ from fastapi import FastAPI, File, Query, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from egyptian_national_id_ocr.core.pipeline import Pipeline
+from egyptian_national_id_ocr.core.config import settings
 from egyptian_national_id_ocr.ocr.paddle_ocr_engine import PaddleOCREngine
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Egyptian National ID OCR API")
 
-# Configure CORS for React development server
+# Configure CORS - see Settings.CORS_ALLOWED_ORIGINS for why this is a
+# configured allowlist, not "*", now that allow_credentials is True.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the actual origin
+    allow_origins=settings.cors_allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,7 +55,31 @@ async def process_id_card(
             detail="That doesn't look like an image file. Please upload a JPG or PNG photo of the ID card.",
         )
 
-    contents = await file.read()
+    # Read in bounded chunks rather than `await file.read()`, and abort
+    # as soon as the running total crosses MAX_UPLOAD_SIZE_MB - a public
+    # upload endpoint with no size limit lets a single request buffer an
+    # arbitrarily large body into memory, and a client's declared
+    # Content-Length isn't trustworthy enough to rely on alone. This
+    # bounds actual memory use to roughly one chunk beyond the limit,
+    # for every request, regardless of what the client sends or claims.
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    chunk_size = 1024 * 1024
+    contents = bytearray()
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        contents.extend(chunk)
+        if len(contents) > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"That image is larger than the {settings.MAX_UPLOAD_SIZE_MB}MB "
+                    "limit. Please upload a smaller photo."
+                ),
+            )
+    contents = bytes(contents)
+
     if not contents:
         raise HTTPException(
             status_code=400,

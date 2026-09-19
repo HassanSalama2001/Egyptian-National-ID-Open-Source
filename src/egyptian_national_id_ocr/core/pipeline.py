@@ -64,6 +64,29 @@ class Pipeline:
     # measurements behind this value.
     ORIENTATION_CONFIRMED_CONFIDENCE = 0.6
 
+    # Hard wall-clock ceiling for one process_image() call, covering all
+    # four rotation attempts combined.
+    #
+    # Without this, a scan whose numeric fields never pass their
+    # validator pays for every offset in NUMERIC_CROP_OFFSETS (12) at
+    # every binarization-ladder config (up to 5 methods x 3 upscale
+    # factors) for every numeric field (up to 3), on every rotation that
+    # doesn't confirm (up to 4) - a combinatorial blowup, not a slow
+    # path. Measured on a real failure: a square image that
+    # misclassified front-as-back took 175s. That is a denial-of-service
+    # surface on a public API/MCP endpoint, independent of whether the
+    # misclassification itself gets fixed - any image that fools the
+    # validators the same way pays the same cost.
+    #
+    # Set with margin above the slowest scan confirmed CORRECT on the
+    # maintainer's own benchmark (a real back scan measured at 25.1s -
+    # see docs/LIMITATIONS.md), so this cannot cut off a result that
+    # already works. It is checked at multiple granularities (between
+    # rotations, before entering a field's offset-retry ladder, before
+    # the free-text fallback/rescan passes) so the worst case is bounded
+    # to roughly one ladder's overrun past the deadline, not unbounded.
+    MAX_PROCESSING_SECONDS = 45
+
     def process_image(self, image: np.ndarray) -> IDCard:
         """
         Input contract: expects a well-framed card image - the card
@@ -101,10 +124,11 @@ class Pipeline:
             result.processing_time_ms = int((time.time() - overall_start) * 1000)
             return result
 
+        deadline = overall_start + self.MAX_PROCESSING_SECONDS
         best_result: Optional[IDCard] = None
         for rotation, label in self.ROTATIONS_TO_TRY:
             attempt_image = cv2.rotate(image, rotation) if rotation is not None else image
-            result, orientation_confirmed = self._process_single_orientation(attempt_image)
+            result, orientation_confirmed = self._process_single_orientation(attempt_image, deadline)
             logger.debug(f"Orientation {label}: status={result.status} confidence={result.confidence:.2f}")
 
             if result.decoded is not None:
@@ -126,13 +150,34 @@ class Pipeline:
                 # verified on the first attempt.
                 break
 
+            if time.time() >= deadline:
+                # MAX_PROCESSING_SECONDS reached across the attempts tried
+                # so far - stop paying for further rotations. best_result
+                # already carries whatever was actually read, with its
+                # real (not inflated) confidence, and the honest status
+                # this scan earned; nothing here fabricates a better
+                # answer than the data supports.
+                if "Processing time limit reached" not in " ".join(best_result.messages):
+                    best_result.messages.append(
+                        "Processing time limit reached - not every orientation "
+                        "could be tried. The result below is the best reading "
+                        "found before the limit."
+                    )
+                break
+
         best_result.processing_time_ms = int((time.time() - overall_start) * 1000)
         return best_result
 
-    def _process_single_orientation(self, image: np.ndarray) -> tuple[IDCard, bool]:
+    def _process_single_orientation(
+        self, image: np.ndarray, deadline: Optional[float] = None
+    ) -> tuple[IDCard, bool]:
         """Returns (result, orientation_confirmed) - see the
         orientation_confirmed assignment below for what the flag means and
-        why process_image uses it to skip the remaining rotations."""
+        why process_image uses it to skip the remaining rotations.
+
+        `deadline` is an absolute time.time() value (see
+        MAX_PROCESSING_SECONDS); None means unbounded, so direct callers
+        (tests, scripts) that don't pass one keep today's behavior."""
         start_time = time.time()
         result = IDCard()
         field_confidences: List[float] = []
@@ -203,6 +248,7 @@ class Pipeline:
                     rectified, field_crops, analyzer.FRONT_FIELDS, field_confidences,
                     alt_field_crops=analyzer.get_field_crops(normalized),
                     crop_source=rectified,
+                    deadline=deadline,
                 )
 
                 # 5. Populate Data
@@ -271,6 +317,7 @@ class Pipeline:
                     rectified, field_crops, analyzer.BACK_FIELDS, field_confidences,
                     alt_field_crops=analyzer.get_back_field_crops(normalized),
                     crop_source=rectified,
+                    deadline=deadline,
                 )
 
                 # 5. Populate Data
@@ -633,6 +680,7 @@ class Pipeline:
         field_confidences: List[float],
         alt_field_crops: Optional[Dict[str, np.ndarray]] = None,
         crop_source: Optional[np.ndarray] = None,
+        deadline: Optional[float] = None,
     ) -> tuple[dict, dict]:
         """
         Extracts every field's text plus its base64 crop preview.
@@ -727,7 +775,7 @@ class Pipeline:
             # a wrong rotation rather than a hard-to-read card, and every
             # failed image pays for all four rotations - the same guard
             # the per-field fallback ladder uses below.
-            if self.FREE_TEXT_RESCAN_SCALE > 1 and any(
+            if self.FREE_TEXT_RESCAN_SCALE > 1 and (deadline is None or time.time() < deadline) and any(
                 text.strip() for text, _ in free_text_by_field.values()
             ):
                 scale = self.FREE_TEXT_RESCAN_SCALE
@@ -815,7 +863,11 @@ class Pipeline:
                 # strongest evidence available - two independent
                 # binarization methods agreeing on a result of exactly the
                 # expected length.
-                if crop_source is not None and field_name in self.NUMERIC_OFFSET_RETRY_FIELDS:
+                if (
+                    crop_source is not None
+                    and field_name in self.NUMERIC_OFFSET_RETRY_FIELDS
+                    and (deadline is None or time.time() < deadline)
+                ):
                     # Each field gets the strongest acceptance test it can
                     # offer: the national ID validates itself via its
                     # check digit, and expiry_date validates against the
@@ -847,7 +899,8 @@ class Pipeline:
                         box = field_boxes.get(field_name)
                         if box is not None:
                             shifted_text, shifted_confidence = self._retry_numeric_at_offsets(
-                                crop_source, box, expected_length, separators, validator=validator
+                                crop_source, box, expected_length, separators,
+                                validator=validator, deadline=deadline,
                             )
                             # A validated reading beats an unvalidated one
                             # even when the latter scored higher on method
@@ -884,7 +937,7 @@ class Pipeline:
                 # ~34s and a ~10s answer. The original reason the ladder
                 # exists (one short field undetected while its neighbours
                 # read fine) is unaffected - that case has detections.
-                if not raw_text and free_text_by_field:
+                if not raw_text and free_text_by_field and (deadline is None or time.time() < deadline):
                     # Last resort for a field the clustered pass found
                     # nothing for at all: real-card testing showed a short
                     # single word (first_name) can still go undetected even
@@ -1114,6 +1167,7 @@ class Pipeline:
         expected_length: Optional[int],
         separators: Optional[List[int]],
         validator=None,
+        deadline: Optional[float] = None,
     ) -> tuple[str, float]:
         """Re-cuts one numeric field at small offsets from its nominal box,
         returning the best-supported reading found (or an empty result).
@@ -1139,6 +1193,13 @@ class Pipeline:
         best_text, best_confidence = "", 0.0
 
         for dx, dy in self.NUMERIC_CROP_OFFSETS:
+            if deadline is not None and time.time() >= deadline:
+                # MAX_PROCESSING_SECONDS reached mid-search - stop trying
+                # further offsets and return whatever this field has
+                # found so far (possibly nothing), rather than let one
+                # field's search run past the budget process_image is
+                # meant to enforce.
+                break
             nx, ny = x + dx, y + dy
             if nx < 0 or ny < 0 or nx + w > canvas_w or ny + h > canvas_h:
                 continue
