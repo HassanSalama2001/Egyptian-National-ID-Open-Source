@@ -1,3 +1,4 @@
+import sys
 import typer
 import cv2
 import json
@@ -11,6 +12,33 @@ from rich.table import Table
 # Add local path logic if needed or assume installed
 from .core.pipeline import Pipeline
 from .core.config import settings
+
+# Windows' default console codepage (cp1252, or an OEM codepage like 437)
+# cannot encode Arabic, and every field this CLI prints is Arabic text -
+# so on a stock Windows terminal, `egy-nid-ocr extract` crashed with
+# UnicodeEncodeError on the first extraction, table AND json output alike
+# (confirmed: reproduced with a freshly-installed wheel in a clean venv,
+# no source tree involved). Two separate write paths both need UTF-8:
+# Rich's native Windows console writer queries the OS console codepage
+# directly via the Win32 API (SetConsoleOutputCP), while a redirected/
+# piped stdout (a log file, `| less`, a CI job) instead goes through
+# Python's own TextIOWrapper (reconfigure). Neither alone covers both
+# cases, so both are set; each is wrapped since one can be unavailable
+# without the other (e.g. no console attached at all when run from a
+# GUI-launched process).
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+    except Exception:
+        pass
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
 
 app = typer.Typer(help="Egyptian National ID OCR extraction tool")
 console = Console()

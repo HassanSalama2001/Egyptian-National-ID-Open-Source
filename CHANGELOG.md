@@ -9,6 +9,24 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
+### Fixed
+- The built wheel did not contain the trained digit classifier or the
+  detection templates - setuptools' default file finder collects `.py`
+  files only. A fresh `pip install` looked successful and then failed on
+  the first scan ("Digit classifier model not found"), for every numeric
+  field. Added `[tool.setuptools.package-data]`; proven by building a
+  wheel and installing it into a venv with no source tree available
+  (`tests/test_packaging.py`, opt-in via `RUN_PACKAGING_TEST=1`).
+- The CLI crashed with `UnicodeEncodeError` on Windows' default console
+  codepage (cp1252) printing the first Arabic field - which is most
+  fields, since Arabic is this tool's whole subject. Force UTF-8 on both
+  the native Windows console codepage and Python's stdout/stderr at CLI
+  startup (`tests/test_cli_encoding.py`).
+
+### Added
+- `LICENSE` (MIT) - `pyproject.toml` declared the license but no file
+  granted it.
+
 ## [0.2.0]
 
 ### Added

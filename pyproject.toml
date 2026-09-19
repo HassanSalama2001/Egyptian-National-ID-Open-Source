@@ -61,6 +61,23 @@ egy-nid-ocr-mcp = "egyptian_national_id_ocr.mcp_server:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# Non-.py files the package needs AT RUNTIME, not just for development -
+# setuptools' default file-finder only collects .py files, so without
+# this the trained digit classifier and the card-detection templates are
+# silently left out of the wheel. Confirmed by building a wheel and
+# listing its contents: neither was present, so a fresh `pip install`
+# raised "Digit classifier model not found" on the first scan attempt -
+# every numeric field (national_id, serial_number, both dates) would
+# have failed for every user, while the package appeared to install
+# successfully. This is the one packaging config that gets tested
+# directly (see tests/test_packaging.py): building a wheel and installing
+# it into a clean venv with no source tree available.
+[tool.setuptools.package-data]
+egyptian_national_id_ocr = [
+    "ocr/models/*.joblib",
+    "detection/templates/*.jpg",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
