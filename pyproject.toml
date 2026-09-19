@@ -1,6 +1,6 @@
 [project]
 name = "egyptian-national-id-ocr"
-version = "0.2.0"
+version = "0.3.0"
 description = "Fast, local, open-source Egyptian National ID OCR extraction pipeline"
 readme = "README.md"
 authors = [{ name = "Hassan Salama" }]

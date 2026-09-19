@@ -13,6 +13,12 @@ Read **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** before relying on
 this for anything — it documents exactly what does and doesn't work yet,
 measured against a real card scanned four different ways, not estimated.
 
+Four ways to call it — command line, Python, HTTP API, or MCP server, all
+below. Every one of them takes the same input and returns the same
+fields; **[docs/INTERFACES.md](docs/INTERFACES.md)** is the full
+reference for each — exact request/response shapes, every field
+documented, and real example output (synthetic card, never a real one).
+
 ## What it extracts
 
 **Front:** national ID number (checksum-validated), first/full name,
@@ -50,6 +56,9 @@ egy-nid-ocr extract path/to/card.jpg --output json
 egy-nid-ocr doctor    # checks the runtime is set up correctly
 ```
 
+Full flag reference and example JSON output:
+[docs/INTERFACES.md § Command line](docs/INTERFACES.md#command-line-cli).
+
 ## Python
 
 ```python
@@ -64,6 +73,9 @@ print(result.status, result.confidence)
 if result.front:
     print(result.front.national_id, result.front.first_name)
 ```
+
+Full `IDCard` field reference (every field, every enum value):
+[docs/INTERFACES.md § Python SDK](docs/INTERFACES.md#python-sdk).
 
 ## HTTP API
 
@@ -80,6 +92,9 @@ curl -X POST "http://localhost:8000/ocr?include_images=false" \
 response — the difference between a payload measured in kilobytes and
 one measured in megabytes.
 
+Full request/response shapes, error codes, and example output:
+[docs/INTERFACES.md § HTTP API](docs/INTERFACES.md#http-api).
+
 ## MCP server
 
 Exposes the pipeline as tools an AI assistant can call directly.
@@ -88,6 +103,9 @@ Exposes the pipeline as tools an AI assistant can call directly.
 pip install "egyptian-national-id-ocr[mcp]"
 egy-nid-ocr-mcp
 ```
+
+Tool signatures and example results:
+[docs/INTERFACES.md § MCP server](docs/INTERFACES.md#mcp-server).
 
 ## Web demo
 

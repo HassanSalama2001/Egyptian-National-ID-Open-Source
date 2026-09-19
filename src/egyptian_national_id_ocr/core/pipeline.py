@@ -32,8 +32,8 @@ class Pipeline:
         self.detector = CardDetector()
         self.classifier = SideClassifier()
         if ocr_engine is None:
-            # Both cli.py and api/server.py constructed Pipeline() without
-            # ever passing an ocr_engine, leaving this None - the first
+            # Both cli.py and app.py constructed Pipeline() without ever
+            # passing an ocr_engine, leaving this None - the first
             # non-numeric field would crash with AttributeError. Default to
             # PaddleOCR (see ocr/paddle_ocr_engine.py): faster and more
             # accurate than EasyOCR for this use case, and this makes the

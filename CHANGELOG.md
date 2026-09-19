@@ -9,6 +9,32 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-20
+
+### Added
+- `docs/INTERFACES.md`: full input/output reference for every interface
+  (CLI, HTTP API, MCP server, Python SDK) - exact request/response
+  shapes, every field documented, real example output from a synthetic
+  card. Linked from the README's own per-interface sections rather than
+  duplicating the detail inline.
+- Docker: fixed `docker/backend.Dockerfile`, which had drifted to
+  target a dead duplicate API module (`egyptian_national_id_ocr.api.
+  server`, an unhardened pre-Phase-1 copy of the real app with none of
+  this release's CORS allowlist or upload-size-cap fixes) and installed
+  `tesseract-ocr` system packages for an engine that hasn't been the
+  default since before this changelog starts. Removed the dead module
+  entirely; the Dockerfile now builds `src/app.py` (the same app the
+  README documents and CI tests) and installs `libgomp1` (PaddlePaddle's
+  OpenMP runtime - present on a full OS image, easy to miss on a
+  minimal one) and pre-downloads PaddleOCR's models at build time rather
+  than on the container's first request. Verified by actually running
+  the built image and posting a real image to `/ocr`: identical output
+  to the same card processed outside Docker.
+- `.github/workflows/docker-publish.yml`: builds and pushes
+  `docker/backend.Dockerfile` to GitHub Container Registry (`ghcr.io`)
+  on every published release, using the workflow's own built-in
+  `GITHUB_TOKEN` - no external account or stored secret to configure.
+
 ### Fixed (post-push, round 2)
 CI's second run failed on a third real bug, in `scripts/training/
 generate_trial_ids.py`: `FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"` -
@@ -215,6 +241,7 @@ before pushing the fix.
   for free text, a dedicated HOG+SVM classifier for digits, mod-11
   checksum validation and repair, FastAPI service and React demo UI.
 
-[Unreleased]: https://github.com/HassanSalama2001/National-ID-Open-Source/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/HassanSalama2001/National-ID-Open-Source/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/HassanSalama2001/National-ID-Open-Source/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/HassanSalama2001/National-ID-Open-Source/releases/tag/v0.2.0
 [0.1.0]: https://github.com/HassanSalama2001/National-ID-Open-Source/releases/tag/v0.1.0
