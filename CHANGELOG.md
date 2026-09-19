@@ -9,6 +9,33 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
+### Fixed (post-push)
+CI's actual first run on GitHub's runners (unverifiable locally - see
+the Phase 2 entry above) failed on push, in all 4 jobs. Root causes,
+found from the real run logs rather than guessed:
+- `pytest` was never declared as an installable dependency anywhere -
+  it only ran locally because a dev venv happened to have it installed
+  outside `pyproject.toml`. Added a `test` extra (`pytest`, `httpx` -
+  the latter needed by FastAPI's `TestClient`) and had both CI jobs
+  install it.
+- The `packaging` job installed only `pytest` itself, but the outer
+  `pytest tests/test_packaging.py` invocation still collects
+  `tests/conftest.py` (which imports `cv2`/`numpy` to build its
+  synthetic-card fixture) even when told to run one file - so it now
+  installs the full package via the same `test` extra.
+- `tests/test_packaging.py`'s CLI-entry-point test had a path-doubling
+  bug (`clean_venv.parent / "Scripts"` when `clean_venv.parent` was
+  already the Scripts directory) and, separately, still pointed at
+  `assets/dataset/ID0.png` - deleted in the Phase 3 hygiene pass without
+  this reference being updated, so it was silently skipping instead of
+  testing anything. Fixed the path; switched the image to a freshly
+  generated seeded synthetic card instead of a file that could go
+  missing again.
+
+All three re-verified end to end in a genuinely fresh venv (not the dev
+environment that had been masking the missing `pytest` dependency)
+before pushing the fix.
+
 ### Removed
 - 18 committed `debug_*`/`detected_*` files (dumped at the repo root
   and in `debug_rois/` from earlier debugging sessions) - synthetic,

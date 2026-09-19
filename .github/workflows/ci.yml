@@ -33,7 +33,7 @@ jobs:
           cache: pip
 
       - name: Install package
-        run: pip install -e ".[mcp,training]"
+        run: pip install -e ".[mcp,training,test]"
 
       - name: Run test suite
         run: python -m pytest tests -q
@@ -49,8 +49,16 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install test dependencies
-        run: pip install pytest
+      - name: Install package
+        # The outer `pytest` invocation below collects tests/conftest.py
+        # even when told to run only test_packaging.py - and conftest.py
+        # imports cv2/numpy at module level to build its synthetic-card
+        # fixture. That needs the full package, not just pytest itself
+        # (CI's first real run failed on exactly this: "No module named
+        # cv2"). The wheel-in-a-clean-venv check that test_packaging.py
+        # actually performs is unaffected either way - it builds and
+        # installs into its OWN isolated venv internally.
+        run: pip install -e ".[mcp,training,test]"
 
       - name: Build wheel, install into a clean venv, run the CLI
         env:

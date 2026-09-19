@@ -54,6 +54,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Everything `pytest tests` itself needs to even COLLECT the suite -
+# httpx is required by fastapi/starlette's TestClient (tests/
+# test_api_hardening.py), and pytest was, until CI caught it, not
+# declared anywhere at all: it only ran locally because a dev venv had
+# it installed ad hoc, outside pyproject.toml. CI's first real run
+# failed on exactly this ("No module named pytest") - this extra exists
+# so that failure mode can't happen again for anyone else, including a
+# future CI job that only installs "the package" and expects tests to
+# be runnable.
+test = [
+    "pytest",
+    "httpx",
+]
 # MCP server (egy-nid-ocr-mcp), exposing the pipeline as tools an AI
 # assistant can call. Optional because the OCR pipeline, HTTP API and CLI
 # all work without it.
