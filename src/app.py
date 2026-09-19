@@ -1,14 +1,16 @@
+import io
 import logging
 import os
 import time
 import cv2
 import numpy as np
 import base64
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from PIL import Image, ImageOps
+from fastapi import FastAPI, File, Query, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-from national_id_ocr.core.pipeline import Pipeline
-from national_id_ocr.ocr.paddle_ocr_engine import PaddleOCREngine
+from egyptian_national_id_ocr.core.pipeline import Pipeline
+from egyptian_national_id_ocr.ocr.paddle_ocr_engine import PaddleOCREngine
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,19 @@ engine = PaddleOCREngine()
 pipeline = Pipeline(ocr_engine=engine)
 
 @app.post("/ocr")
-async def process_id_card(file: UploadFile = File(...)):
+async def process_id_card(
+    file: UploadFile = File(...),
+    include_images: bool = Query(
+        True,
+        description=(
+            "Whether to include base64 image payloads (the aligned card "
+            "image, the per-field crops, and a copy of the uploaded photo). "
+            "These power the 'show your work' UI but dominate the response "
+            "size - set false for a data-only response that is orders of "
+            "magnitude smaller."
+        ),
+    ),
+):
     start_time = time.time()
 
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -46,8 +60,21 @@ async def process_id_card(file: UploadFile = File(...)):
             detail="The uploaded file is empty. Please choose a photo and try again.",
         )
 
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # Decode via PIL (not cv2.imdecode) specifically to apply exif_transpose:
+    # phone photos commonly store pixels in one orientation plus an EXIF
+    # Orientation tag saying how to rotate/mirror for display. cv2.imdecode
+    # ignores that tag entirely and loads the raw pixels, so a real phone
+    # photo could be processed sideways or mirrored even though it displays
+    # upright everywhere else - align_card's rotation retry only tries pure
+    # rotations, not mirrors, so a mirrored EXIF orientation would never
+    # self-correct. exif_transpose() normalizes both cases before any of
+    # our own processing sees the image.
+    try:
+        pil_image = Image.open(io.BytesIO(contents))
+        pil_image = ImageOps.exif_transpose(pil_image)
+        image = cv2.cvtColor(np.array(pil_image.convert("RGB")), cv2.COLOR_RGB2BGR)
+    except Exception:
+        image = None
 
     if image is None:
         raise HTTPException(
@@ -59,6 +86,12 @@ async def process_id_card(file: UploadFile = File(...)):
         # Process through pipeline
         id_card = pipeline.process_image(image)
         id_card.processing_time_ms = int((time.time() - start_time) * 1000)
+
+        if not include_images:
+            # Data-only response: no aligned card image, no field crops,
+            # and no echo of the uploaded photo (that echo is the single
+            # largest item in the payload).
+            return {"data": id_card.without_images().model_dump(), "image": None}
 
         # Convert original image to base64 to show in UI
         _, buffer = cv2.imencode('.jpg', image)

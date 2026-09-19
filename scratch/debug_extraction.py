@@ -6,9 +6,9 @@ import sys
 # Add src to path
 sys.path.append("src")
 
-from national_id_ocr.postprocessing.national_id_parser import find_nid_in_text
-from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
-from national_id_ocr.ocr.base import OCRPreprocessor
+from egyptian_national_id_ocr.postprocessing.national_id_parser import find_nid_in_text
+from egyptian_national_id_ocr.ocr.easyocr_engine import EasyOCREngine
+from egyptian_national_id_ocr.ocr.base import OCRPreprocessor
 
 def debug_image(image_path):
     if not os.path.exists(image_path):

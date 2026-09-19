@@ -1,9 +1,9 @@
 import cv2
 import os
 import numpy as np
-from national_id_ocr.ocr.base import OCRPreprocessor
-from national_id_ocr.segmentation.front_segmenter import FrontSegmenter
-from national_id_ocr.detection.card_detector import CardDetector
+from egyptian_national_id_ocr.ocr.base import OCRPreprocessor
+from egyptian_national_id_ocr.segmentation.front_segmenter import FrontSegmenter
+from egyptian_national_id_ocr.detection.card_detector import CardDetector
 
 def debug_preprocess(img_path):
     img = cv2.imread(img_path)

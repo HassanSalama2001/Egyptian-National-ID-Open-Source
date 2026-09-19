@@ -1,8 +1,10 @@
 import typer
 import cv2
 import json
+import numpy as np
 import os
 from pathlib import Path
+from PIL import Image, ImageOps
 from rich.console import Console
 from rich.table import Table
 
@@ -17,13 +19,36 @@ console = Console()
 def extract(
     image_path: Path = typer.Argument(..., help="Path to the National ID image file"),
     output: str = typer.Option("table", "--output", "-o", help="Output format (table, json)"),
+    include_images: bool = typer.Option(
+        False,
+        "--include-images/--no-include-images",
+        help=(
+            "Include base64 image payloads (aligned card + per-field crops) "
+            "in JSON output. Off by default - they run to over a megabyte, "
+            "which is rarely what you want in a terminal or piped into jq."
+        ),
+    ),
 ):
-    """Extract data from an Egyptian National ID card image."""
+    """Extract data from an Egyptian National ID card image.
+
+    Note the default differs from the HTTP API's on purpose: the API
+    serves a web UI that displays the crops, so it includes them unless
+    asked not to. A CLI writes to a terminal or a pipe, where a megabyte
+    of base64 is noise, so here they are opt-in.
+    """
     if not image_path.exists():
         console.print(f"[red]Error: File {image_path} not found.[/red]")
         raise typer.Exit(1)
         
-    image = cv2.imread(str(image_path))
+    # PIL + exif_transpose, not cv2.imread: cv2 ignores EXIF Orientation, so
+    # a real phone photo could load sideways/mirrored - see src/app.py for
+    # the full explanation.
+    try:
+        pil_image = Image.open(image_path)
+        pil_image = ImageOps.exif_transpose(pil_image)
+        image = cv2.cvtColor(np.array(pil_image.convert("RGB")), cv2.COLOR_RGB2BGR)
+    except Exception:
+        image = None
     if image is None:
         console.print("[red]Error: Could not decode image.[/red]")
         raise typer.Exit(1)
@@ -33,6 +58,9 @@ def extract(
     with console.status("[bold green]Processing image..."):
         result = pipeline.process_image(image)
         
+    if not include_images:
+        result = result.without_images()
+
     if output == "json":
         console.print(result.model_dump_json(indent=2))
     else:
@@ -40,15 +68,32 @@ def extract(
         table = Table(title="Extracted ID Data")
         table.add_column("Field", style="cyan")
         table.add_column("Value", style="magenta")
-        
+
         if result.front:
             table.add_row("Side", "Front")
             table.add_row("First Name", result.front.first_name)
+            table.add_row("First Name (EN)", result.front.first_name_english)
             table.add_row("Full Name", result.front.full_name)
+            table.add_row("Full Name (EN)", result.front.full_name_english)
             table.add_row("Address", result.front.address)
+            table.add_row("Address (EN)", result.front.address_english)
             table.add_row("National ID", result.front.national_id)
+            table.add_row("Date of Birth", result.front.date_of_birth)
             table.add_row("Serial Number", result.front.card_serial_number)
-            
+
+        # The back side used to print nothing at all here beyond the
+        # timing row - the table only ever handled the front.
+        if result.back:
+            table.add_row("Side", "Back")
+            table.add_row("National ID", result.back.national_id)
+            table.add_row("Issue Date", result.back.issue_date)
+            table.add_row("Expiry Date", result.back.expiry_date)
+            table.add_row("Profession", result.back.profession)
+            table.add_row("Profession (EN)", result.back.profession_english)
+            table.add_row("Gender", result.back.gender.value)
+            table.add_row("Religion", result.back.religion.value)
+            table.add_row("Marital Status", result.back.marital_status.value)
+
         if result.decoded:
             table.add_row("---", "---")
             table.add_row("Decoded DOB", str(result.decoded.birth_date))
@@ -56,9 +101,16 @@ def extract(
             table.add_row("Decoded Gov", result.decoded.governorate.value)
             
         table.add_row("---", "---")
+        table.add_row("Status", result.status.value)
+        table.add_row("Confidence", f"{result.confidence:.0%}")
         table.add_row("Time Taken", f"{result.processing_time_ms}ms")
-        
+
         console.print(table)
+
+        # The status messages carry the "this needs review and here's why"
+        # detail that a bare confidence number doesn't convey.
+        for message in result.messages:
+            console.print(f"[yellow]{message}[/yellow]")
 
 @app.command()
 def doctor():

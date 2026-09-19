@@ -1,6 +1,6 @@
 import cv2
 import pytest
-from national_id_ocr.core.pipeline import Pipeline
+from egyptian_national_id_ocr.core.pipeline import Pipeline
 
 
 @pytest.mark.xfail(

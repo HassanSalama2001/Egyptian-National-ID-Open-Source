@@ -22,17 +22,31 @@ credentials/
 # assets/*template*/*Egyptian_ID_Card* (blank template) belong in git.
 assets/front.jpg
 assets/back.jpg
+
+# Hassan's own real card, every scan variant (normal/enhanced/greyscale/
+# eco, front and back), plus the expected-values file the accuracy
+# regression test reads. This is the benchmark the pipeline is judged
+# against, so it has to stay on disk - and it is a real identity
+# document, so it must never leave this machine. tests/test_own_benchmark.py
+# skips itself when the folder is absent, so the suite still passes for
+# anyone who clones the repo without it.
+assets/own_benchmark/
 detected_front.jpg
 detected_back.jpg
+detected_*.png
+detected_*.jpg
 
 # Generated synthetic training/benchmark data and trained models -
 # reproducible via scripts/training/generate_trial_ids.py,
-# generate_digit_crops.py, train_digit_classifier.py (fixed seed=42),
-# not committed
-data/synthetic_front/
-data/digits/
-data/digits_v2/
-data/models/
+# generate_digit_crops.py, train_digit_classifier.py (fixed seed=42).
+# Whole directory, not a list of subfolders - new scratch subfolders
+# (e.g. data/_mcp_tmp/, data/synthetic_front_test/) kept slipping past
+# an enumerated list and nearly got committed.
+data/
+
+# setuptools build scratch dir (build/bdist.*, build/lib/) - regenerated
+# by `pip wheel .` / `python -m build`, never hand-edited.
+build/
 
 # Node / frontend
 node_modules/
@@ -43,3 +57,4 @@ dist/
 .vscode/
 .idea/
 .DS_Store
+.claude/

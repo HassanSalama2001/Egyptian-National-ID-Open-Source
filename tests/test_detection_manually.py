@@ -6,8 +6,8 @@ from pathlib import Path
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from national_id_ocr.detection.card_detector import CardDetector
-from national_id_ocr.core.exceptions import NationalIDOCRError
+from egyptian_national_id_ocr.detection.card_detector import CardDetector
+from egyptian_national_id_ocr.core.exceptions import NationalIDOCRError
 
 def test_detection():
     detector = CardDetector()

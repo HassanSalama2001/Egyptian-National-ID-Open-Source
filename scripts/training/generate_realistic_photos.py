@@ -58,11 +58,15 @@ def random_background(width: int, height: int, rng: random.Random) -> Image.Imag
     return bg
 
 
-def composite_at_angle(card_img: Image.Image, background: Image.Image, rng: random.Random) -> Image.Image:
+def composite_at_angle(card_img: Image.Image, background: Image.Image, rng: random.Random,
+                        min_scale: float = 0.5, max_scale: float = 0.85) -> Image.Image:
     angle = rng.uniform(-25, 25)
     # Scale the card down to occupy a random fraction of the frame width,
-    # like a real photo where the card doesn't fill the whole shot
-    scale = rng.uniform(0.5, 0.85)
+    # like a real photo where the card doesn't fill the whole shot.
+    # Range is a parameter (not just widened in place) so the stress-test
+    # script can generate separate well-framed vs. zoomed-out batches and
+    # report accuracy per condition instead of one blended number.
+    scale = rng.uniform(min_scale, max_scale)
     target_w = int(background.width * scale)
     target_h = int(card_img.height * (target_w / card_img.width))
     resized = card_img.resize((target_w, target_h), Image.LANCZOS)
@@ -79,7 +83,15 @@ def composite_at_angle(card_img: Image.Image, background: Image.Image, rng: rand
 
     canvas = background.copy()
     canvas.paste(rotated, pos, rotated.convert("RGBA") if rotated.mode != "RGBA" else rotated)
-    return canvas
+    # Axis-aligned ground-truth box for the (possibly rotated) card region
+    # within the final canvas - lets a stress test measure whether contour
+    # detection found the CORRECT region, not just "found something".
+    # Confirmed necessary: an earlier version of this stress test only
+    # checked "was a contour returned at all", which missed a real bug
+    # where a confidently WRONG region (matching aspect ratio by
+    # coincidence) was being returned instead of a correct one.
+    bbox = (pos[0], pos[1], pos[0] + rotated.width, pos[1] + rotated.height)
+    return canvas, bbox
 
 
 def main():
@@ -87,6 +99,12 @@ def main():
     parser.add_argument("--count", type=int, default=100)
     parser.add_argument("--output", default=str(PROJECT_ROOT / "data" / "realistic_photos"))
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--min-scale", type=float, default=0.5)
+    parser.add_argument("--max-scale", type=float, default=0.85)
+    # Simulates a black-and-white photocopy/scan - a documented real-world
+    # condition (many IDs get scanned, not photographed) that the color
+    # pipeline needs to be measured against, not just assumed to handle.
+    parser.add_argument("--grayscale", action="store_true")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -103,7 +121,10 @@ def main():
 
         canvas_w, canvas_h = int(card_img.width * 1.4), int(card_img.height * 1.6)
         background = random_background(canvas_w, canvas_h, rng)
-        photo = composite_at_angle(card_img, background, rng).convert("RGB")
+        photo, _bbox = composite_at_angle(card_img, background, rng, args.min_scale, args.max_scale)
+        photo = photo.convert("RGB")
+        if args.grayscale:
+            photo = photo.convert("L").convert("RGB")
 
         filename = f"photo_{i:04}.jpg"
         photo.save(output_dir / filename, quality=88)

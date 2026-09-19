@@ -7,8 +7,8 @@ from pathlib import Path
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from national_id_ocr.core.pipeline import Pipeline
-from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
+from egyptian_national_id_ocr.core.pipeline import Pipeline
+from egyptian_national_id_ocr.ocr.easyocr_engine import EasyOCREngine
 
 def test_full_pipeline():
     dataset_dir = Path("assets/dataset")

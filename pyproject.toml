@@ -1,9 +1,9 @@
 [project]
-name = "national-id-ocr"
-version = "0.1.0"
+name = "egyptian-national-id-ocr"
+version = "0.2.0"
 description = "Fast, local, open-source Egyptian National ID OCR extraction pipeline"
 readme = "README.md"
-authors = [{ name = "Antigravity", email = "antigravity@example.com" }]
+authors = [{ name = "Hassan Salama" }]
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
@@ -33,6 +33,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# MCP server (egy-nid-ocr-mcp), exposing the pipeline as tools an AI
+# assistant can call. Optional because the OCR pipeline, HTTP API and CLI
+# all work without it.
+mcp = [
+    "mcp>=2.0",
+]
 # Synthetic data generation + model training/benchmarking tooling.
 # Not required to run the OCR pipeline itself.
 training = [
@@ -49,7 +55,8 @@ legacy-ocr = [
 ]
 
 [project.scripts]
-nid-ocr = "national_id_ocr.cli:app"
+egy-nid-ocr = "egyptian_national_id_ocr.cli:app"
+egy-nid-ocr-mcp = "egyptian_national_id_ocr.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

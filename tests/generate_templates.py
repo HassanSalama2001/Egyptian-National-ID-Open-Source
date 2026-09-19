@@ -5,7 +5,7 @@ from pathlib import Path
 def generate_templates():
     project_root = Path(__file__).parent.parent
     assets_dir = project_root / "assets"
-    templates_dir = project_root / "src" / "national_id_ocr" / "detection" / "templates"
+    templates_dir = project_root / "src" / "egyptian_national_id_ocr" / "detection" / "templates"
     
     os.makedirs(templates_dir, exist_ok=True)
     

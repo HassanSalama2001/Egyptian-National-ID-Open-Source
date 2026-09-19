@@ -7,7 +7,7 @@ from pathlib import Path
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from national_id_ocr.core.layout_analyzer import LayoutAnalyzer
+from egyptian_national_id_ocr.core.layout_analyzer import LayoutAnalyzer
 
 def test_layout_on_dataset():
     dataset_dir = Path("assets/dataset")

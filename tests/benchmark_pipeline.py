@@ -4,10 +4,10 @@ import random
 import cv2
 import numpy as np
 from pathlib import Path
-from national_id_ocr.core.pipeline import Pipeline
+from egyptian_national_id_ocr.core.pipeline import Pipeline
 
 def run_benchmark(dataset_dir: str, num_samples: int = 50):
-    from national_id_ocr.ocr.easyocr_engine import EasyOCREngine
+    from egyptian_national_id_ocr.ocr.easyocr_engine import EasyOCREngine
     
     # Initialize Pipeline with EasyOCR for host-compatibility
     engine = EasyOCREngine(gpu=False)

@@ -26,7 +26,7 @@ def test_easyocr(image_path):
     print("--- RESULTS ---")
     for res in results:
         # Convert to standard numbers for easier reading in logs if needed
-        from national_id_ocr.postprocessing.numeral_converter import normalize_arabic_numerals
+        from egyptian_national_id_ocr.postprocessing.numeral_converter import normalize_arabic_numerals
         norm = normalize_arabic_numerals(res)
         print(f"Original: {res} | Normalized: {norm}")
     print("---------------")

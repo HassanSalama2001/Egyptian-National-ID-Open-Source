@@ -12,9 +12,26 @@ const FIELDS = [
   { cropKey: 'serial_number', valueKey: 'card_serial_number', label: 'Serial Number', rtl: false },
 ]
 
+// gender/religion/marital_status are fuzzy-matched to an enum (see
+// postprocessing/enum_matcher.py) rather than passed through as raw OCR
+// text - "unknown" is the no-match fallback, not a detected value, so
+// isEnum fields treat it the same as empty for display purposes.
+const BACK_FIELDS = [
+  { cropKey: 'national_id', valueKey: 'national_id', label: 'National ID', rtl: false },
+  { cropKey: 'issue_date', valueKey: 'issue_date', label: 'Issue Date', rtl: false },
+  { cropKey: 'expiry_date', valueKey: 'expiry_date', label: 'Expiry Date', rtl: false },
+  { cropKey: 'profession', valueKey: 'profession', label: 'Profession', rtl: true },
+  { cropKey: 'gender', valueKey: 'gender', label: 'Gender', rtl: false, isEnum: true },
+  { cropKey: 'religion', valueKey: 'religion', label: 'Religion', rtl: false, isEnum: true },
+  { cropKey: 'marital_status', valueKey: 'marital_status', label: 'Marital Status', rtl: false, isEnum: true },
+]
+
 export default function ResultsView({ originalImage, result, onReset }) {
   const [showJson, setShowJson] = useState(false)
   const front = result.front
+  const back = result.back
+  const side = front || back
+  const sideFields = front ? FIELDS : BACK_FIELDS
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,7 +56,7 @@ export default function ResultsView({ originalImage, result, onReset }) {
         </div>
       </div>
 
-      {front && (
+      {side && (
         <>
           <div>
             <p className="mb-3 text-sm font-semibold text-slate-600">
@@ -47,15 +64,19 @@ export default function ResultsView({ originalImage, result, onReset }) {
               <span className="ml-2 font-normal text-slate-400">— each region is cropped and read independently</span>
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {FIELDS.map((f) => (
-                <FieldRow
-                  key={f.cropKey}
-                  label={f.label}
-                  value={front[f.valueKey]}
-                  cropSrc={front.field_crops?.[f.cropKey]}
-                  rtl={f.rtl}
-                />
-              ))}
+              {sideFields.map((f) => {
+                const rawValue = side[f.valueKey]
+                const value = f.isEnum && rawValue === 'unknown' ? '' : rawValue
+                return (
+                  <FieldRow
+                    key={f.cropKey}
+                    label={f.label}
+                    value={value}
+                    cropSrc={side.field_crops?.[f.cropKey]}
+                    rtl={f.rtl}
+                  />
+                )
+              })}
             </div>
           </div>
 

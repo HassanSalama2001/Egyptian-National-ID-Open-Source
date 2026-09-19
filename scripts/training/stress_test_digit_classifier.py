@@ -20,7 +20,7 @@ from PIL import Image, ImageFont, ImageDraw, ImageFilter
 from skimage.feature import hog
 
 WESTERN_TO_ARABIC_INDIC = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
-FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"
+FONT_PATH = "C:/Windows/Fonts/tahomabd.ttf"  # see generate_digit_crops.py for why this stayed Tahoma
 CANVAS = 64
 
 
@@ -99,6 +99,13 @@ def hard_augment(img: Image.Image, rng: random.Random) -> Image.Image:
 
 
 def generate_stress_set(n_per_class: int, seed: int):
+    # to_inference_form mirrors what DigitClassifierEngine actually hands
+    # the model (a hard binary glyph, isolated and re-centred) - without
+    # it this benchmark scores the model on a distribution production
+    # never produces, which is how ~86% here coexisted with far worse
+    # real-card results. See generate_digit_crops.to_inference_form.
+    from generate_digit_crops import to_inference_form
+
     rng = random.Random(seed)
     np.random.seed(seed)
     X, y = [], []
@@ -106,7 +113,7 @@ def generate_stress_set(n_per_class: int, seed: int):
         for _ in range(n_per_class):
             font_size = int(44 * rng.uniform(0.85, 1.15))
             clean = render_clean_digit(digit, font_size)
-            aug = hard_augment(clean, rng)
+            aug = to_inference_form(hard_augment(clean, rng))
             X.append(np.array(aug))
             y.append(int(digit))
     return np.array(X), np.array(y)

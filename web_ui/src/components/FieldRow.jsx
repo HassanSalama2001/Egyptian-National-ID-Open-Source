@@ -15,7 +15,8 @@ export default function FieldRow({ label, value, cropSrc, rtl }) {
         <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
         <p
           dir={rtl ? 'rtl' : 'ltr'}
-          className={`truncate text-base ${hasValue ? 'font-semibold text-slate-800' : 'italic text-slate-400'}`}
+          title={hasValue ? value : undefined}
+          className={`text-base break-words ${hasValue ? 'font-semibold text-slate-800' : 'italic text-slate-400'}`}
         >
           {hasValue ? value : 'not detected'}
         </p>

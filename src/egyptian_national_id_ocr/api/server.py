@@ -4,6 +4,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 import cv2
 import numpy as np
 import io
+from PIL import Image, ImageOps
 from .core.pipeline import Pipeline
 from .core.config import settings
 from .models.id_card import IDCard
@@ -46,8 +47,17 @@ async def extract_nid(file: UploadFile = File(...)):
             detail="The uploaded file is empty. Please choose a photo and try again.",
         )
 
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # PIL + exif_transpose, not cv2.imdecode: cv2 ignores EXIF Orientation,
+    # so a real phone photo (pixels stored sideways/mirrored plus a "rotate
+    # for display" tag) would be processed in the wrong orientation even
+    # though it displays upright everywhere else - see src/app.py for the
+    # full explanation of this same fix.
+    try:
+        pil_image = Image.open(io.BytesIO(contents))
+        pil_image = ImageOps.exif_transpose(pil_image)
+        image = cv2.cvtColor(np.array(pil_image.convert("RGB")), cv2.COLOR_RGB2BGR)
+    except Exception:
+        image = None
 
     if image is None:
         raise HTTPException(
