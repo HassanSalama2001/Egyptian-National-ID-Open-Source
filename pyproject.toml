@@ -6,9 +6,30 @@ readme = "README.md"
 authors = [{ name = "Hassan Salama" }]
 license = { text = "MIT" }
 requires-python = ">=3.10"
+keywords = [
+    "ocr",
+    "egyptian-national-id",
+    "id-card",
+    "arabic-ocr",
+    "computer-vision",
+    "document-extraction",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "opencv-python-headless",
-    "pytesseract",
     "numpy",
     "fastapi",
     "uvicorn[standard]",
@@ -46,13 +67,24 @@ training = [
     "python-bidi",
     "tqdm",
 ]
-# EasyOCR (PyTorch) is no longer the default engine (see
-# paddle_ocr_engine.py) - kept only for the benchmark/comparison
-# scripts under tests/ and scripts/ that reference EasyOCREngine
-# directly. Not needed to run the pipeline itself.
+# EasyOCR (PyTorch) and Tesseract are not the default engine (see
+# paddle_ocr_engine.py) - kept only for TesseractEngine/EasyOCREngine,
+# which nothing in the pipeline imports by default (confirmed: grepping
+# the package for TesseractEngine/tesseract_engine turns up nothing
+# outside this file and a comment). Not needed to run the pipeline
+# itself - `egy-nid-ocr doctor` checks for the tesseract system BINARY
+# separately (shutil.which), which is unaffected by whether this Python
+# package is installed.
 legacy-ocr = [
     "easyocr",
+    "pytesseract",
 ]
+
+[project.urls]
+Homepage = "https://github.com/HassanSalama2001/National-ID-Open-Source"
+Repository = "https://github.com/HassanSalama2001/National-ID-Open-Source"
+Issues = "https://github.com/HassanSalama2001/National-ID-Open-Source/issues"
+Changelog = "https://github.com/HassanSalama2001/National-ID-Open-Source/blob/main/CHANGELOG.md"
 
 [project.scripts]
 egy-nid-ocr = "egyptian_national_id_ocr.cli:app"

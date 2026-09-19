@@ -1,38 +1,23 @@
 import cv2
-import sys
-import os
-from pathlib import Path
-
-# Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from egyptian_national_id_ocr.detection.card_detector import CardDetector
-from egyptian_national_id_ocr.core.exceptions import NationalIDOCRError
 
-def test_detection():
+
+def test_detection(synthetic_card_sample):
+    """
+    Rewritten - the old version (pointed at the now-retired
+    assets/dataset/) had no assertions at all: it printed a message and
+    `continue`d past any failure, so it "passed" unconditionally
+    regardless of whether detection worked, and it unconditionally wrote
+    detected_*.png files into the working directory as a side effect.
+    Neither is true of this version.
+    """
     detector = CardDetector()
-    # Synthetic samples only - never point this at a real card photo.
-    # assets/front.jpg / assets/back.jpg (a real ID card) were previously
-    # used here, got committed to git by accident, and have been scrubbed
-    # from history entirely.
-    assets = ["dataset/ID0.png", "dataset/IDB0.png"]
 
-    for asset in assets:
-        img_path = Path(__file__).parent.parent / "assets" / asset
-        print(f"Testing detection on {asset}...")
-        
-        image = cv2.imread(str(img_path))
-        if image is None:
-            print(f"Error: Could not load {asset}")
-            continue
-            
-        try:
-            detected = detector.detect(image)
-            output_path = f"detected_{asset.replace('/', '_')}"
-            cv2.imwrite(output_path, detected)
-            print(f"Success! Saved to {output_path}")
-        except NationalIDOCRError as e:
-            print(f"Failed to detect {asset}: {e}")
+    for path in (synthetic_card_sample["front_path"], synthetic_card_sample["back_path"]):
+        image = cv2.imread(str(path))
+        assert image is not None, f"Could not load {path}"
 
-if __name__ == "__main__":
-    test_detection()
+        detected = detector.detect(image)
+        assert detected is not None, f"CardDetector.detect() returned None for {path}"
+        assert detected.size > 0, f"CardDetector.detect() returned an empty image for {path}"

@@ -9,7 +9,51 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
+### Removed
+- 18 committed `debug_*`/`detected_*` files (dumped at the repo root
+  and in `debug_rois/` from earlier debugging sessions) - synthetic,
+  not real card data, but stale clutter with no place in a published
+  repo.
+- `assets/dataset/` (720 unlabelled files). Predated field-box
+  calibration against `assets/front_template.jpg`; measured at 0.30
+  confidence and up to 175s per image (see the time-budget entry
+  below - this was the reproduction case for that fix), and the one
+  test that used it was already marked `xfail`. Superseded entirely by
+  the seeded synthetic generator (`scripts/training/generate_trial_ids.py`)
+  and the maintainer's own real-card benchmark
+  (`scripts/benchmark_own.py`). `tests/conftest.py`'s fixtures and the
+  tests that used them (`test_layout_pipeline.py`,
+  `test_detection_manually.py`) now generate a fresh seeded card
+  instead - and assert real expected values from the generator's own
+  ground truth, where the old xfail test only checked "some 14 digits
+  that pass a checksum", and the old detection test had **no
+  assertions at all** (it printed and `continue`d past failures, so it
+  "passed" unconditionally regardless of whether detection worked).
+- `pytesseract` from required dependencies. Nothing in the package
+  imports `TesseractEngine` by default (confirmed: grepped for it,
+  found only a comment); moved to the existing `legacy-ocr` optional
+  extra alongside `easyocr`. Verified by uninstalling it from the dev
+  environment and confirming every core import and the full test suite
+  still pass.
+
+### Security
+- Overwrote the 2D barcode region in `assets/Egyptian_ID_Card.jpg` (a
+  stock two-sided card image in the repo since its initial commit) and
+  `assets/back_template.jpg` (cut from it) with random noise. A real
+  Egyptian ID's barcode encodes the holder's data, and this stock
+  image's provenance - genuine photograph vs. purpose-built mock-up -
+  could not be established from the file itself. The pipeline never
+  reads this barcode (no such field exists in `BACK_FIELDS`), so this
+  costs nothing functionally. See
+  `scripts/training/scrub_barcode.py` for the reproducible procedure
+  and the reasoning in full. Verified post-scrub: shift-robust
+  cross-correlation against a real card's barcode is at chance level
+  (0.171 vs. a 0.091 chance ceiling).
+
 ### Added
+- PyPI metadata: `classifiers`, `keywords`, `[project.urls]`
+  (Homepage/Repository/Issues/Changelog). Verified in the built wheel's
+  METADATA, not just in `pyproject.toml`.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
 - `tests/test_privacy_no_network.py`: blocks real outbound network
   connections during a `process_image()` call and fails if one is
