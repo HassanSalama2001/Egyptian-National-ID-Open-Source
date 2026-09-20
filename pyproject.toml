@@ -94,10 +94,10 @@ legacy-ocr = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/HassanSalama2001/National-ID-Open-Source"
-Repository = "https://github.com/HassanSalama2001/National-ID-Open-Source"
-Issues = "https://github.com/HassanSalama2001/National-ID-Open-Source/issues"
-Changelog = "https://github.com/HassanSalama2001/National-ID-Open-Source/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source"
+Repository = "https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source"
+Issues = "https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/issues"
+Changelog = "https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/blob/main/CHANGELOG.md"
 
 [project.scripts]
 egy-nid-ocr = "egyptian_national_id_ocr.cli:app"

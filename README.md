@@ -43,8 +43,8 @@ pip install egyptian-national-id-ocr
 From source:
 
 ```bash
-git clone https://github.com/HassanSalama2001/National-ID-Open-Source.git
-cd National-ID-Open-Source
+git clone https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source.git
+cd Egyptian-National-ID-Open-Source
 pip install -e .
 ```
 

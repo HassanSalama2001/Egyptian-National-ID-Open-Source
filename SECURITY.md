@@ -5,9 +5,9 @@
 Please **do not** open a public GitHub issue for a security vulnerability.
 
 Instead, use GitHub's private
-[security advisory form](https://github.com/HassanSalama2001/National-ID-Open-Source/security/advisories/new)
+[security advisory form](https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/security/advisories/new)
 for this repository, or email the maintainer directly (see the
-[commit history](https://github.com/HassanSalama2001/National-ID-Open-Source/commits/main)
+[commit history](https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/commits/main)
 for a contact address).
 
 Include, where possible:

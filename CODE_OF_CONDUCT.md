@@ -48,7 +48,7 @@ representing the project.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may
 be reported to the maintainer via the contact information in the
-[commit history](https://github.com/HassanSalama2001/National-ID-Open-Source/commits/main).
+[commit history](https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/commits/main).
 All complaints will be reviewed and investigated promptly and fairly.
 
 Maintainers are obligated to respect the privacy and security of the
