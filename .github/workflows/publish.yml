@@ -1,0 +1,55 @@
+name: Publish to PyPI
+
+# Uses PyPI Trusted Publishing (OIDC): PyPI trusts this exact repo,
+# workflow file and environment, so no API token or password is stored
+# anywhere. The workflow name, repo and environment must match the
+# publisher registered on pypi.org exactly - renaming this file breaks it.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Check the wheel ships the model and templates
+        run: |
+          python - <<'EOF'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          assert any(n.endswith(".joblib") for n in names), "model missing from wheel"
+          assert sum("templates/" in n for n in names) >= 2, "templates missing from wheel"
+          print("wheel contents OK")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
