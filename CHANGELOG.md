@@ -9,6 +9,61 @@ described in [docs/LIMITATIONS.md](docs/LIMITATIONS.md), not estimated.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-28
+
+Driven by four real scans sent in by a user of 0.3.0 (not stored here):
+a tight crop whose background strip shifted every field, a card small
+and sideways on an A4 scan, a greyscale scan with the two name lines
+merged, and a negative (white-on-black) scan.
+
+### Added
+- `core/card_preprocessor.py`: finds, crops, orients and
+  polarity-corrects the card ONCE, before any OCR. The outline is
+  searched under several thresholdings in both polarities; each side is
+  snapped to the image's real edge with a robust (RANSAC) line fit;
+  background margins on an already card-shaped photo are trimmed as
+  tilted lines; an invisible side is placed from its opposite side and
+  the card's known aspect ratio; the corners are ordered by the card's
+  own long edge (a sideways card is rotated, not squashed); negative
+  scans are inverted back; upright vs. 180 degrees is decided with the
+  printed header/emblem templates.
+- `scripts/training/benchmark_card_crop.py`: measures crop accuracy on
+  synthetic scenes with a known card placement, one per failure type.
+  99% of cards within 12px (1200x750 space), up from 16% with
+  `align_card`. `tests/test_card_preprocessor.py` guards it.
+- `tests/test_own_benchmark.py`: the filter variants of one real scan
+  must crop to the same place (within 6px) - a crop regression test on
+  real scans, not only synthetic ones.
+
+### Changed
+- `Pipeline.process_image` reads at most two prepared candidates (as
+  found, and turned 180 degrees) instead of re-running detection on four
+  raw rotations of the photo. `Pipeline.USE_CARD_PREPROCESSOR = False`
+  restores the old path. Field boxes are offset to the new, tighter crop
+  (`PHYSICAL_FRAME_SHIFT`, measured on real scans - see its comment).
+- On the maintainer's 8 real scans: 4 fields wrong, down from 6; every
+  national ID correct, as before. See `docs/LIMITATIONS.md`.
+- Synthetic generator (`scripts/training/generate_trial_ids.py`): the
+  back is drawn from the pipeline's boxes as it applies them to a
+  CardPreprocessor crop (`BACK_FIELDS` + `PHYSICAL_FRAME_SHIFT`), mapped
+  onto the template's physical card area instead of its whole canvas
+  (which includes a white border). Generated backs now read their
+  national ID 34/36 times across six scene types, up from 17/36; the
+  maintainer's real scans are unchanged (4 fields wrong, every national
+  ID correct).
+
+### Fixed
+- A national ID reading that is not even structurally possible (e.g.
+  `00000000200000`) is no longer displayed; the field is left empty with
+  a message saying why.
+- first_name coming back empty with its text merged into full_name,
+  when the OCR detector proposes both lines as one region: each line is
+  now re-read from its own box.
+- Back side: an unread printed gender is taken from the verified
+  national ID (its 13th digit), never overriding one that was read.
+- "This card expired on ..." was appended to the result's messages and
+  then overwritten by the status message, so it never reached the user.
+
 ## [0.3.0] - 2026-09-20
 
 ### Added
@@ -241,7 +296,8 @@ before pushing the fix.
   for free text, a dedicated HOG+SVM classifier for digits, mod-11
   checksum validation and repair, FastAPI service and React demo UI.
 
-[Unreleased]: https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/releases/tag/v0.2.0
 [0.1.0]: https://github.com/HassanSalama2001/Egyptian-National-ID-Open-Source/releases/tag/v0.1.0

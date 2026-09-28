@@ -21,7 +21,11 @@ and say so in the changelog.
 2. Update `docs/LIMITATIONS.md` if any measured number moved. Re-run the
    benchmark and paste the real figures; do not carry old ones forward.
 3. Bump `version` in `pyproject.toml`.
-4. Tag `vX.Y.Z` and push.
+4. Commit, push, and wait for CI to pass.
+5. Publish a GitHub release tagged `vX.Y.Z`. That triggers
+   `.github/workflows/publish.yml` (PyPI, via Trusted Publishing - no
+   token) and `docker-publish.yml` (GHCR). A PyPI version can never be
+   re-uploaded, so this is the irreversible step.
 
 ### What counts as which bump
 
@@ -37,9 +41,11 @@ part of the interface.
 
 ## Python package
 
+Published by CI on a GitHub release (step 5 above). To check the
+build locally first:
+
 ```bash
 python -m build
-python -m twine upload dist/*
 ```
 
 ## JavaScript client

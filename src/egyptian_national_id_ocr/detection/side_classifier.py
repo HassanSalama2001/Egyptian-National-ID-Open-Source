@@ -30,8 +30,9 @@ class SideClassifier:
         checks both the normal and 180-rotated template-match score to
         decide the side robustly. That in-place "fix upside-down" flip
         used to exist here, but it's redundant with (and actively fights)
-        Pipeline.ROTATIONS_TO_TRY, which already tries the whole image at
-        0/90/180/270 as independent attempts and keeps whichever produces
+        the pipeline's own orientation handling - CardPreprocessor decides
+        upright vs. 180 once, with a required score margin, and the
+        pipeline still tries both candidates and keeps whichever produces
         the best real result. Template-match scores are noisy on a real
         (as opposed to synthetic) photo - on a genuinely real card, the
         180-rotated score sometimes edges out the upright score by a small

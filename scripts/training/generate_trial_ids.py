@@ -74,6 +74,20 @@ FRONT_FIELDS = {
     "serial_number":{"anchor": (747, 1473), "font_size": 52, "digits": False},
 }
 
+def _physical_card_bounds(template_path: Path) -> tuple:
+    """(x0, y0, x1, y1) of the physical card inside a template image, in
+    template pixels. The templates carry a white border around the card
+    itself (20-37px in 1200x750 units); a real photo never does. Same rule
+    as scripts/training/benchmark_card_crop.py's physical_card(): rows and
+    columns where most pixels are darker than paper-white."""
+    import numpy as np
+
+    dark = np.asarray(Image.open(template_path).convert("L")) < 235
+    cols = np.where(dark.mean(axis=0) > 0.5)[0]
+    rows = np.where(dark.mean(axis=1) > 0.5)[0]
+    return int(cols[0]), int(rows[0]), int(cols[-1]) + 1, int(rows[-1]) + 1
+
+
 def _back_fields_from_analyzer() -> dict:
     """Derives the back-side draw anchors directly from the pipeline's own
     crop boxes, instead of hard-coding a second set of coordinates.
@@ -93,13 +107,22 @@ def _back_fields_from_analyzer() -> dict:
     vertically centred; the font is sized from the box height so the
     rendered text fills the crop the way real printing does, rather than
     sitting tiny inside an over-large box.
+
+    The boxes are taken exactly as the pipeline applies them to a card
+    from CardPreprocessor - which crops to the card's PHYSICAL edge - i.e.
+    BACK_FIELDS plus Pipeline.PHYSICAL_FRAME_SHIFT["back"], and mapped onto
+    the template's physical card area, not its whole canvas (which
+    includes a white border). Mapping onto the whole canvas used to draw
+    every back row ~13px (1200x750 units) lower than a real card prints
+    it, so generated backs failed their national_id where real scans
+    read it.
     """
-    from PIL import Image as _Image
-
     from egyptian_national_id_ocr.core.layout_analyzer import LayoutAnalyzer
+    from egyptian_national_id_ocr.core.pipeline import Pipeline
 
-    width, height = _Image.open(BACK_TEMPLATE_PATH).size
-    scale_x, scale_y = width / 1200, height / 750
+    x0, y0, x1, y1 = _physical_card_bounds(BACK_TEMPLATE_PATH)
+    scale_x, scale_y = (x1 - x0) / 1200, (y1 - y0) / 750
+    boxes = Pipeline._shift_boxes(LayoutAnalyzer().BACK_FIELDS, *Pipeline.PHYSICAL_FRAME_SHIFT["back"])
 
     # Digit fields are drawn at a smaller fraction of box height than text:
     # a date's box is sized for the value plus breathing room, and digits
@@ -108,11 +131,11 @@ def _back_fields_from_analyzer() -> dict:
     digit_fields = {"issue_date", "national_id", "expiry_date"}
 
     fields = {}
-    for name, (x, y, box_w, box_h) in LayoutAnalyzer().BACK_FIELDS.items():
+    for name, (x, y, box_w, box_h) in boxes.items():
         is_digits = name in digit_fields
         fraction = height_fraction["digits" if is_digits else "text"]
         fields[name] = {
-            "anchor": (int((x + box_w) * scale_x), int((y + box_h / 2) * scale_y)),
+            "anchor": (x0 + int((x + box_w) * scale_x), y0 + int((y + box_h / 2) * scale_y)),
             "font_size": max(18, int(box_h * scale_y * fraction)),
             "digits": is_digits,
         }

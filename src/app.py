@@ -91,8 +91,8 @@ async def process_id_card(
     # Orientation tag saying how to rotate/mirror for display. cv2.imdecode
     # ignores that tag entirely and loads the raw pixels, so a real phone
     # photo could be processed sideways or mirrored even though it displays
-    # upright everywhere else - align_card's rotation retry only tries pure
-    # rotations, not mirrors, so a mirrored EXIF orientation would never
+    # upright everywhere else - the pipeline's orientation handling only
+    # covers rotations, not mirrors, so a mirrored EXIF orientation would never
     # self-correct. exif_transpose() normalizes both cases before any of
     # our own processing sees the image.
     try:

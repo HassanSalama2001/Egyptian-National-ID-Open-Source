@@ -37,12 +37,12 @@ from benchmark_own import (  # noqa: E402
 # xfail instead of failing the suite - but they are NOT skipped, so if a
 # change fixes one, pytest reports XPASS and the entry should be removed.
 KNOWN_GAPS = {
-    ("back-greyscale.jpeg", "expiry_date"):
-        "day digits unreadable; degrades to YYYY/MM via the 7-year rule",
-    ("back-greyscale.jpeg", "profession"):
-        "last word not proposed by the detector at this scan resolution",
-    ("back-eco.jpeg", "profession"):
-        "last word not proposed by the detector at this scan resolution",
+    # back-greyscale expiry_date/profession and back-eco profession were
+    # listed here under align_card; all three read correctly since the
+    # CardPreprocessor crop and were removed.
+    ("back.jpg", "profession"):
+        "same length, one character different since the CardPreprocessor "
+        "crop; recogniser noise on a card cut off at the photo's top edge",
     ("front-enhanced.jpeg", "address"):
         "one extra character (39 vs 38); recogniser noise, not truncation",
     ("front-greyscale.jpeg", "address"):
@@ -108,3 +108,37 @@ def test_front_variant_field(readings, expected, variant, field, request):
 @pytest.mark.parametrize("field", BACK_FIELDS)
 def test_back_variant_field(readings, expected, variant, field, request):
     _check(readings, expected, variant, "back", field, request)
+
+
+# The -enhanced/-greyscale/-eco variants of each side are the SAME scan
+# saved through different scanner filters, so the card sits at the same
+# photo pixels in all three. That makes the best-contrast variant a real
+# ground truth for where the others' crops must land - a crop regression
+# test on real scans, not only synthetic ones. Before this check existed
+# the eco back crop was ~20px inside the card on two sides (its top edge
+# is invisible under that filter) and nothing flagged it.
+SAME_SCAN_GROUPS = [FRONT_VARIANTS[1:], BACK_VARIANTS[1:]]
+SAME_SCAN_TOLERANCE_PX = 6
+
+
+@pytest.mark.parametrize("group", SAME_SCAN_GROUPS, ids=["front", "back"])
+def test_filter_variants_of_one_scan_crop_to_the_same_place(group):
+    import cv2
+    import numpy as np
+    from egyptian_national_id_ocr.core.card_preprocessor import CardPreprocessor, _CANON
+
+    pre = CardPreprocessor()
+    quads = {}
+    for name in group:
+        path = BENCHMARK_DIR / name
+        if not path.exists():
+            pytest.skip(f"{name} not present")
+        M = pre.prepare(load(path))[0].M
+        quads[name] = cv2.perspectiveTransform(
+            _CANON.reshape(-1, 1, 2), np.linalg.inv(M)).reshape(-1, 2)
+    ref_name = group[0]
+    for name in group[1:]:
+        worst = float(np.linalg.norm(quads[name] - quads[ref_name], axis=1).max())
+        assert worst <= SAME_SCAN_TOLERANCE_PX, (
+            f"{name}: card corner {worst:.1f}px from where {ref_name} puts it"
+        )

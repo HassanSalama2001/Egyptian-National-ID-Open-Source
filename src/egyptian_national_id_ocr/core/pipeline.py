@@ -18,6 +18,7 @@ from ..models.enums import ExtractionStatus, Gender, Religion, MaritalStatus
 from ..postprocessing.enum_matcher import match_enum, GENDER_VALUES, RELIGION_VALUES, MARITAL_STATUS_VALUES
 from .layout_analyzer import LayoutAnalyzer
 from .field_clusterer import FieldClusterer
+from .card_preprocessor import CardPreprocessor, PreparedCard
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +47,37 @@ class Pipeline:
         # dedicated lightweight digit classifier instead of the general
         # OCR engine - see ocr/digit_classifier_engine.py for why.
         self.digit_engine = DigitClassifierEngine()
+        self.card_preprocessor = CardPreprocessor(classifier=self.classifier)
 
     # Tried in this order because align_card's contour-based detection can
     # itself be orientation-sensitive (a portrait photo of a landscape card
     # rarely produces a plausible card-shaped contour), so we can't rely on
     # it alone to notice the image is sideways.
+    # Crop, rotate and polarity-correct the card ONCE, up front, with
+    # CardPreprocessor (see core/card_preprocessor.py), then read at most
+    # two candidates: the card as found and the same card turned 180
+    # degrees. Measured on scripts/training/benchmark_card_crop.py, this
+    # puts 99% of cards within 12px of the right place versus 16% for
+    # align_card, including sideways, upside-down and inverted scans that
+    # the rotation loop below could never fix (it rotated the raw photo,
+    # then re-ran the same detection that had failed). False restores the
+    # legacy align_card + ROTATIONS_TO_TRY path, kept for A/B measurement.
+    USE_CARD_PREPROCESSOR = True
+
+    # (dx, dy) offset, in 1200x750 px, applied to the fixed field boxes
+    # when the card comes from CardPreprocessor. The boxes were calibrated
+    # on align_card's output, which kept a variable band of background
+    # around the card; CardPreprocessor crops to the card's own edge, so
+    # the printed rows sit slightly elsewhere. Measured on the
+    # maintainer's real scans, four per side (field names only, values
+    # never printed), and set to the MIDDLE of a plateau, not the single
+    # best point:
+    #   back:  dy -12..-15 -> 4 wrong, every National ID right;
+    #          0 -> 7 wrong; -18 or beyond loses a National ID.
+    #   front: dx -6..-14 -> 3-4 wrong (address only, as with align_card);
+    #          0 -> 5 wrong; vertical shifts were all worse.
+    PHYSICAL_FRAME_SHIFT = {"front": (-10, 0), "back": (0, -13)}
+
     ROTATIONS_TO_TRY = [
         (None, "0°"),
         (cv2.ROTATE_90_CLOCKWISE, "90°"),
@@ -89,28 +116,19 @@ class Pipeline:
 
     def process_image(self, image: np.ndarray) -> IDCard:
         """
-        Input contract: expects a well-framed card image - the card
-        filling (or nearly filling) the frame, as a guided-crop UI would
-        produce (user aligns the card to an on-screen outline before
-        submitting), NOT an unconstrained photo of a card sitting on an
-        arbitrary background. This is a deliberate scope decision, not an
-        oversight: align_card's contour-based detection for the latter
-        case has a known bug (see scripts/training/generate_realistic_
-        photos.py's docstring) and free-form document detection is a
-        substantially harder, separate problem. Accuracy figures (98%+ on
-        data/synthetic_front/) only hold for well-framed input.
+        Input: a photo or scan containing one card - tightly cropped, with
+        a background margin, or small on a scanned page; at any rotation;
+        colour, greyscale or negative. CardPreprocessor finds, crops and
+        orients the card first (see USE_CARD_PREPROCESSOR). Best results
+        still come from the card filling most of the frame: every pixel
+        of the photo that isn't card is resolution the fields don't get.
 
-        Tries the image at 0/90/180/270 degree rotations (see
-        ROTATIONS_TO_TRY) and returns the best result - this covers "the
-        card is framed correctly but the photo itself is sideways/upside
-        down" (e.g. phone held in a different orientation), which a
-        guided-crop UI does not otherwise prevent. A checksum-valid
-        National ID is a hard correctness signal, so the first rotation
-        that produces one is returned immediately without trying the rest -
-        the common case (already-upright photo) stays a single fast pass.
-        Otherwise, the highest-confidence attempt across all four is
-        returned so there's always *some* result with an honest status/
-        message, rather than silently only ever trying one orientation.
+        Reads the prepared card, most-likely-upright candidate first. A
+        checksum-valid National ID is a hard correctness signal, so the
+        first candidate that produces one is returned immediately - the
+        common case stays a single pass. Otherwise the highest-confidence
+        attempt is returned so there's always *some* result with an
+        honest status/message.
         """
         overall_start = time.time()
 
@@ -126,9 +144,15 @@ class Pipeline:
 
         deadline = overall_start + self.MAX_PROCESSING_SECONDS
         best_result: Optional[IDCard] = None
-        for rotation, label in self.ROTATIONS_TO_TRY:
-            attempt_image = cv2.rotate(image, rotation) if rotation is not None else image
-            result, orientation_confirmed = self._process_single_orientation(attempt_image, deadline)
+        if self.USE_CARD_PREPROCESSOR:
+            attempts = [(None, c, " / ".join(c.notes)) for c in self.card_preprocessor.prepare(image)]
+        else:
+            attempts = [(cv2.rotate(image, r) if r is not None else image, None, label)
+                        for r, label in self.ROTATIONS_TO_TRY]
+        for attempt_image, prepared, label in attempts:
+            result, orientation_confirmed = self._process_single_orientation(
+                attempt_image, deadline, prepared=prepared
+            )
             logger.debug(f"Orientation {label}: status={result.status} confidence={result.confidence:.2f}")
 
             if result.decoded is not None:
@@ -169,7 +193,8 @@ class Pipeline:
         return best_result
 
     def _process_single_orientation(
-        self, image: np.ndarray, deadline: Optional[float] = None
+        self, image: Optional[np.ndarray], deadline: Optional[float] = None,
+        prepared: Optional[PreparedCard] = None,
     ) -> tuple[IDCard, bool]:
         """Returns (result, orientation_confirmed) - see the
         orientation_confirmed assignment below for what the flag means and
@@ -177,7 +202,11 @@ class Pipeline:
 
         `deadline` is an absolute time.time() value (see
         MAX_PROCESSING_SECONDS); None means unbounded, so direct callers
-        (tests, scripts) that don't pass one keep today's behavior."""
+        (tests, scripts) that don't pass one keep today's behavior.
+
+        `prepared` is a card CardPreprocessor already cropped, oriented and
+        polarity-corrected; when given, `image` is ignored and align_card
+        is skipped."""
         start_time = time.time()
         result = IDCard()
         field_confidences: List[float] = []
@@ -186,11 +215,21 @@ class Pipeline:
         # repair with nothing to confirm it is still surfaced, but must
         # never be presented as verified - see repair_nid_detailed.
         nid_trusted = False
+        # Notes appended AFTER the status block below, which replaces
+        # result.messages wholesale - anything added to result.messages
+        # before it is silently lost (the expiry notice used to be).
+        extra_messages: List[str] = []
 
         try:
             # 1. Detect & Align Card (Warp to 1200x750)
             analyzer = LayoutAnalyzer()
-            rectified, M = analyzer.align_card(image)
+            if prepared is not None:
+                rectified = prepared.image
+                M = prepared.M if prepared.aligned else None
+                analyzer.FRONT_FIELDS = self._shift_boxes(analyzer.FRONT_FIELDS, *self.PHYSICAL_FRAME_SHIFT["front"])
+                analyzer.BACK_FIELDS = self._shift_boxes(analyzer.BACK_FIELDS, *self.PHYSICAL_FRAME_SHIFT["back"])
+            else:
+                rectified, M = analyzer.align_card(image)
             # M is None exactly when get_card_contour found no plausible
             # card boundary and align_card fell back to a naive full-frame
             # resize (see its docstring) - the FRONT_FIELDS/BACK_FIELDS
@@ -276,7 +315,10 @@ class Pipeline:
                         # for the date once it passes; the OCR'd value
                         # already did its job as the cross-check above.
                         result.front.date_of_birth = result.decoded.birth_date
-                elif ocr_birth_date is None:
+                else:
+                    if self._hide_impossible_nid(result.front):
+                        extra_messages.append(self.NID_HIDDEN_MESSAGE)
+                if not repair.nid and ocr_birth_date is None:
                     # Neither the NID nor the date verified, and the date
                     # we read isn't a possible birth date (real scans
                     # produced "4136/11/51" and "3001/11/05"). Showing it
@@ -340,6 +382,19 @@ class Pipeline:
                     result.back.national_id = repair.nid
                     result.decoded = decode_national_id(repair.nid)
                     nid_trusted = not repair.repaired or repair.corroborated
+                else:
+                    if self._hide_impossible_nid(result.back):
+                        extra_messages.append(self.NID_HIDDEN_MESSAGE)
+
+                # Gender is encoded in the NID (13th digit's parity). When
+                # the printed word could not be read at all but the NID is
+                # verified, take it from there - a verified checksum is a
+                # stronger source than the OCR'd word would have been.
+                # Never overrides a gender that WAS read: that reading is
+                # the independent cross-check the NID repair relies on.
+                if (result.back.gender == Gender.UNKNOWN and result.decoded is not None
+                        and nid_trusted and result.decoded.gender != Gender.UNKNOWN):
+                    result.back.gender = result.decoded.gender
 
                 # 7a-pre. The two dates are each other's only cross-check
                 # (neither carries a checksum), so where they disagree,
@@ -385,7 +440,7 @@ class Pipeline:
                 # stay distinguishable from "not expired".
                 result.back.is_expired = self._card_is_expired(result.back.expiry_date)
                 if result.back.is_expired:
-                    result.messages.append(
+                    extra_messages.append(
                         f"This card expired on {result.back.expiry_date}."
                     )
 
@@ -475,6 +530,7 @@ class Pipeline:
                     "the whole card is visible, in focus, and well-lit, "
                     "then try again."
                 ]
+            result.messages.extend(extra_messages)
 
         except Exception as e:
             logger.error(f"Pipeline processing failed: {e}")
@@ -489,6 +545,34 @@ class Pipeline:
 
         result.processing_time_ms = int((time.time() - start_time) * 1000)
         return result, orientation_confirmed
+
+    @staticmethod
+    def _shift_boxes(boxes: Dict[str, list], dx: int, dy: int) -> Dict[str, list]:
+        if not dx and not dy:
+            return boxes
+        return {name: [max(0, x + dx), max(0, y + dy), w, h] for name, (x, y, w, h) in boxes.items()}
+
+    NID_HIDDEN_MESSAGE = (
+        "The National ID number could not be read reliably, so it is not shown."
+    )
+
+    @staticmethod
+    def _hide_impossible_nid(side) -> bool:
+        """Blank a National ID reading that could not belong to anyone.
+
+        Reached only when the reading failed its checksum AND no repair
+        produced a valid number. A reading that is still structurally
+        possible (right length, real century/date/governorate) stays
+        visible under the "please check it" status - it may be one digit
+        off. One that is not (a real scan returned 00000000200000) is
+        certainly wrong, and showing it invites someone to copy it into
+        a form as if it were data."""
+        from ..postprocessing.national_id_parser import is_structurally_valid_nid
+        nid = (side.national_id or "").strip()
+        if nid and not is_structurally_valid_nid(nid):
+            side.national_id = ""
+            return True
+        return False
 
     # Back's issue_date/expiry_date are digit-plus-separator strings, same
     # shape as front's birth_date - the digit classifier already handles
@@ -740,6 +824,7 @@ class Pipeline:
                 shifted = [(poly + np.array([cx, cy]), text, score) for poly, text, score in results]
                 member_boxes = {name: free_text_boxes[name] for name in member_names}
                 bucketed = self._bucket_free_text(shifted, member_boxes)
+                bucketed.update(self._split_merged_lines(rectified, shifted, member_boxes))
                 free_text_by_field.update(bucketed)
                 pending.append(((cx, cy, cw, ch), member_boxes))
 
@@ -1327,6 +1412,45 @@ class Pipeline:
             elif len(candidate) > len(current) and current in candidate:
                 merged[name] = (alt_text, alt_confidence)
         return merged
+
+    # Field rows printed close enough together that the OCR detector can
+    # propose them as ONE two-line region - its centroid then falls in the
+    # lower field's box and the upper field comes back empty, with its
+    # text merged into the lower one. Seen on a real greyscale scan:
+    # first_name empty, full_name holding both lines.
+    STACKED_FIELD_PAIRS = [("first_name", "full_name")]
+
+    def _split_merged_lines(self, rectified: np.ndarray, ocr_results: list,
+                            field_boxes: Dict[str, list]) -> Dict[str, tuple]:
+        """For each STACKED_FIELD_PAIRS pair: if one detection spans both
+        rows (reaches above the upper box's middle AND below the lower
+        box's middle), re-read each row from its own box, so each field
+        gets its own line. Returns only the fields it re-read."""
+        out: Dict[str, tuple] = {}
+        for upper, lower in self.STACKED_FIELD_PAIRS:
+            if upper not in field_boxes or lower not in field_boxes:
+                continue
+            ux, uy, uw, uh = field_boxes[upper]
+            lx, ly, lw, lh = field_boxes[lower]
+            merged = False
+            for poly, _text, _score in ocr_results:
+                ys = np.asarray(poly)[:, 1]
+                if ys.min() < uy + uh / 2 and ys.max() > ly + lh / 2:
+                    merged = True
+                    break
+            if not merged:
+                continue
+            for name, (x, y, w, h) in ((upper, field_boxes[upper]), (lower, field_boxes[lower])):
+                crop = rectified[max(0, y):y + h, max(0, x):x + w]
+                if crop.size == 0:
+                    continue
+                results = self.ocr_engine.read_layout(crop, mode="auto")
+                results = [r for r in results if r[1].strip()]
+                if not results:
+                    continue
+                results = self._sort_reading_order(results)
+                out[name] = (" ".join(r[1] for r in results), min(r[2] for r in results))
+        return out
 
     def _bucket_free_text(self, ocr_results: list, field_boxes: Dict[str, list]) -> Dict[str, tuple]:
         """
