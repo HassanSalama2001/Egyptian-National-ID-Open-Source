@@ -15,6 +15,12 @@ that is a release blocker, not a changelog footnote. If a field listed in
 `KNOWN_GAPS` starts passing, the test fails on purpose — remove the entry
 and say so in the changelog.
 
+A trade can be accepted only by explicit maintainer decision, recorded
+here. **0.4.0:** `back.jpg` profession regressed by one character
+(recogniser noise, same length) while three other back fields started
+passing - 6 fields wrong to 4, every national ID and name still
+correct. Accepted as a net improvement; listed in `KNOWN_GAPS`.
+
 ## Cutting a version
 
 1. Move `[Unreleased]` entries in `CHANGELOG.md` under the new version.
